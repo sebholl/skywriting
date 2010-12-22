@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_layout_file>
+	<ActiveTarget name="helloworld" />
+	<File name="blcr_interface.c" open="1" top="0" tabpos="1">
+		<Cursor position="481" topLine="30" />
+	</File>
+	<File name="curl_helper_functions.c" open="0" top="0" tabpos="0">
+		<Cursor position="711" topLine="15" />
+	</File>
+	<File name="sw_blcr_glue.c" open="1" top="1" tabpos="2">
+		<Cursor position="221" topLine="9" />
+	</File>
+	<File name="sw_interface.c" open="1" top="0" tabpos="3">
+		<Cursor position="4346" topLine="169" />
+	</File>
+	<File name="tests/helloworld.c" open="1" top="0" tabpos="8">
+		<Cursor position="230" topLine="0" />
+	</File>
+</CodeBlocks_layout_file>
