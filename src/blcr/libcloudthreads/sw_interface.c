@@ -59,11 +59,16 @@ const char *sw_post_file_to_worker( const unsigned char *worker_url, const unsig
     curl_easy_setopt( handle, CURLOPT_READDATA, fd );
 
     //curl_easy_setopt( handle, CURLOPT_WRITEFUNCTION, &WriteMemoryCallback );
-    //curl_easy_setopt( handle, CURLOPT_WRITEDATA,  fopen("test.txt","w") );
+    curl_easy_setopt( handle, CURLOPT_WRITEDATA,  fopen("test.txt","w") );
+
+    struct curl_slist *chunk = NULL;
+    chunk = curl_slist_append( chunk, "Content-Type: identity" );
+    curl_easy_setopt( handle, CURLOPT_HTTPHEADER, chunk );
 
     result = curl_easy_perform( handle );
 
     curl_easy_cleanup( handle );
+    curl_slist_free_all( chunk );
 
     fclose(fd);
 
