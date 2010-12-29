@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #include "blcr_interface.h"
 
@@ -19,17 +20,41 @@ static int blcr_callback(void *arg);
 
 /* API */
 
-void blcr_init_framework( void ){
-    cr_init();
-    cr_register_callback(blcr_callback, NULL, CR_SIGNAL_CONTEXT);
+int blcr_init_framework( void ){
+
+    int client_id, cb_id;
+
+    client_id = cr_init();
+
+    if (client_id < 0) {
+      if (errno == ENOSYS) {
+          perror("Checkpoint failed: support missing from kernel\n");
+      } else {
+          printf("Failed cr_init(): %s\n", cr_strerror(errno));
+      }
+      return 0;
+    }
+
+    cb_id = cr_register_callback(blcr_callback, NULL, CR_SIGNAL_CONTEXT);
+
+    if (cb_id < 0) {
+      printf("Failed cr_register_callback(): %s\n", cr_strerror(errno));
+      return 0;
+    }
+
+    return 1;
 }
 
 int blcr_spawn_function( const unsigned char *filepath, void(*fptr)(void), void(*fptr2)(void) ){
+
+    int result;
 
     cr_checkpoint_args_t args;
     cr_checkpoint_handle_t hndl;
 
     cr_initialize_checkpoint_args_t( &args );
+
+	args.cr_flags |= CR_CHKPT_PTRACED_ALLOW|CR_CHKPT_DUMP_ALL;
 
     args.cr_scope = CR_SCOPE_PROC;  // See blcr_common.h
 
@@ -37,23 +62,35 @@ int blcr_spawn_function( const unsigned char *filepath, void(*fptr)(void), void(
     args.cr_fd = open( (const char *) filepath, O_WRONLY | O_CREAT | O_TRUNC , 0600);
 
     blcr_checkpoint_status = blcr_error;
-    cr_request_checkpoint( &args, &hndl );
+
+    result = cr_request_checkpoint( &args, &hndl );
 
     switch(blcr_checkpoint_status){
         case blcr_continue:
             cr_wait_checkpoint( &hndl, NULL );
-            close(args.cr_fd);
             break;
         case blcr_restart:
             fptr();
             fptr2();
             exit(0);
             break;
-        case blcr_error:
-            break;
     }
 
-    return 0;
+    close(args.cr_fd);
+
+    /* Error displaying code from cr_checkpoint.c */
+
+    if (result < 0) {
+        if (errno == CR_ENOSUPPORT) {
+            perror("Checkpoint failed: support missing from application\n");
+        } else {
+            printf("cr_request_checkpoint: %s\n", cr_strerror(errno));
+        }
+    }
+
+    //printf("Checkpointed with return value: %d (errorno: %d).\n", blcr_checkpoint_status, errno );
+
+    return ( (result==0) && (blcr_checkpoint_status!=blcr_error) );
 
 }
 

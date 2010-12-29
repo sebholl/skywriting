@@ -1,0 +1,5 @@
+cd bin/helloworld/
+export SW_WORKER_URL="http://localhost:7002/"
+export SW_TASK_ID=1234
+export SW_MASTER_URL="http://localhost:7001/"
+./libcloudthreads

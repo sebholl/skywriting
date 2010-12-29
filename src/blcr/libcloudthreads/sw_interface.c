@@ -6,6 +6,10 @@
 #include <curl/curl.h>
 #include <openssl/sha.h>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include "curl_helper_functions.h"
 
 int spawn_count = 0;
@@ -13,7 +17,7 @@ int spawn_count = 0;
 const char *sw_post_file_to_worker( const unsigned char *worker_url, const unsigned char *filepath ){
 
     unsigned char *post_url;
-    FILE* fd;
+    FILE *fd;
 
     CURLcode result;
     CURL *handle;
@@ -22,17 +26,40 @@ const char *sw_post_file_to_worker( const unsigned char *worker_url, const unsig
 
     fd = fopen( filepath, "rb" );
 
+    if( fd == NULL ){
+        perror("sw_post_file_to_worker(): Cannot open file for binary reading");
+        return NULL;
+    }
+
     handle = curl_easy_init();
 
     asprintf( &post_url, "%s/data/", worker_url );
-    curl_easy_setopt( handle, CURLOPT_POSTFIELDS, "" );
+
+    curl_easy_setopt( handle, CURLOPT_POST, 1 );
+
+    curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
+
+    {
+        struct stat buf;
+
+        if( fstat( fileno(fd), &buf )==-1 ){
+            fclose(fd);
+            perror("sw_post_file_to_worker(): Error retrieving file properties");
+            return NULL;
+        }
+
+        curl_easy_setopt( handle, CURLOPT_POSTFIELDSIZE, buf.st_size );
+
+        printf("Uploading file \"%s\" to \"%s\" (size: %dB).\n", filepath, post_url, buf.st_size-1 );
+    }
+
     curl_easy_setopt( handle, CURLOPT_URL, post_url );
     free( post_url );
 
     curl_easy_setopt( handle, CURLOPT_READDATA, fd );
 
-    curl_easy_setopt( handle, CURLOPT_WRITEFUNCTION, &WriteMemoryCallback );
-    curl_easy_setopt( handle, CURLOPT_WRITEDATA,  &id );
+    //curl_easy_setopt( handle, CURLOPT_WRITEFUNCTION, &WriteMemoryCallback );
+    //curl_easy_setopt( handle, CURLOPT_WRITEDATA,  fopen("test.txt","w") );
 
     result = curl_easy_perform( handle );
 
@@ -40,25 +67,30 @@ const char *sw_post_file_to_worker( const unsigned char *worker_url, const unsig
 
     fclose(fd);
 
-    if(result==0) return id.memory;
+    if(result!=CURLE_OK){
 
-    return "";
+        printf( "sw_post_file_to_worker(): error during upload: %s\n", curl_easy_strerror(result) );
+        return NULL;
+
+    }
+
+    return id.memory;
 
 }
 
 unsigned char *sw_sha1_hex_digest_from_bytes( const unsigned char *bytes, unsigned int len ){
 
     char *result;
-    int strlen, i;
+    int hexlen, i;
 
     unsigned char hash[SHA_DIGEST_LENGTH];
 
     SHA1( bytes, len, hash );
 
-    strlen = ((SHA_DIGEST_LENGTH >> 2) +1 );
-    result = malloc( strlen*sizeof(char) );
+    hexlen = ((SHA_DIGEST_LENGTH << 1) +1 );
+    result = malloc( hexlen*sizeof(char) );
 
-    for (i = 0; i < strlen; i++) sprintf( result[i], "%02x", hash[i]);
+    for (i = 0; i < SHA_DIGEST_LENGTH; i++) sprintf( &result[i<<1], "%02x", hash[i]);
 
     return result;
 
@@ -70,8 +102,6 @@ unsigned char *sw_get_new_task_id( const unsigned char *current_task_id ){
     int len;
 
     len = asprintf( &str, "%s:%d", current_task_id, ++spawn_count );
-
-    free( str );
 
     return sw_sha1_hex_digest_from_bytes( str, len );
 
@@ -92,9 +122,9 @@ unsigned char *sw_get_new_output_id( const unsigned char *handler, const unsigne
 
 
 
-void sw_init( void ){
+int sw_init( void ){
 
-    curl_global_init( CURL_GLOBAL_ALL );
+    return ( curl_global_init( CURL_GLOBAL_ALL ) == 0 );
 
 }
 
@@ -156,13 +186,14 @@ int sw_spawntasks( const unsigned char *master_url, const unsigned char *parent_
     free( tmp );
 
     //curl_easy_setopt( handle, CURLOPT_POSTFIELDS, post_payload );
-    curl_easy_setopt( handle, CURLOPT_POSTFIELDS, "" );
+    curl_easy_setopt( handle, CURLOPT_POST, 1 );
     curl_easy_setopt( handle, CURLOPT_READFUNCTION, &ReadMemoryCallback );
 
     postdata.memory = post_payload;
     postdata.size = (strlen(post_payload)+1)*sizeof(char);
     postdata.offset = 0;
 
+    curl_easy_setopt( handle, CURLOPT_POSTFIELDSIZE, postdata.size );
     curl_easy_setopt( handle, CURLOPT_READDATA, &postdata );
 
     free( post_payload );
@@ -177,20 +208,18 @@ int sw_spawntasks( const unsigned char *master_url, const unsigned char *parent_
 
 
 inline unsigned char* sw_get_current_worker_url( void ){
-
-    return (unsigned char*)getenv( "SW_WORKER_URL" );
+    unsigned char *value = (unsigned char*)getenv( "SW_WORKER_URL" );
+    return (value != NULL ? value : "http://localhost:9001" );
 
 }
 
 inline unsigned char* sw_get_current_task_id( void ){
-
-    return (unsigned char*)getenv( "SW_TASK_ID" );
-
+    unsigned char *value = (unsigned char*)getenv( "SW_TASK_ID" );
+    return (value != NULL ? value : "1234" );
 }
 
 inline unsigned char* sw_get_master_url( void ){
-
-    return (unsigned char*)getenv( "SW_MASTER_URL" );
-
+    unsigned char *value = (unsigned char*)getenv( "SW_MASTER_URL" );
+    return (value != NULL ? value : "http://localhost:9000" );
 }
 

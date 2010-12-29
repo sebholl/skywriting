@@ -47,3 +47,56 @@
 
 1293044178 /home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/libcloudthreads/sw_blcr_glue.h
 
+1293046428 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/curl_helper_functions.c
+	<stdio.h>
+	<stdlib.h>
+	<string.h>
+	<curl/curl.h>
+	"curl_helper_functions.h"
+
+1293046428 /home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/curl_helper_functions.h
+
+1293589160 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/sw_interface.c
+	<stdio.h>
+	<stdlib.h>
+	<string.h>
+	<curl/curl.h>
+	<openssl/sha.h>
+	<sys/types.h>
+	<sys/stat.h>
+	<unistd.h>
+	"curl_helper_functions.h"
+
+1293046973 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/tests/helloworld.c
+	<stdio.h>
+	<stdlib.h>
+	<unistd.h>
+	"../sw_blcr_glue.h"
+
+1293044178 /home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/sw_blcr_glue.h
+
+1293581988 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/blcr_interface.c
+	<stdio.h>
+	<stdlib.h>
+	<unistd.h>
+	<libcr.h>
+	<sys/types.h>
+	<sys/stat.h>
+	<fcntl.h>
+	<errno.h>
+	"blcr_interface.h"
+
+1293581888 /home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/blcr_interface.h
+
+1293581888 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/sw_blcr_glue.c
+	<stdio.h>
+	<stdlib.h>
+	"blcr_interface.h"
+	"sw_interface.h"
+
+1293581888 /home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/sw_interface.h
+	<stdio.h>
+	<curl/curl.h>
+	<openssl/sha.h>
+	"curl_helper_functions.h"
+

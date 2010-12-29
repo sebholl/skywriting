@@ -5,7 +5,7 @@
 
 #include "curl_helper_functions.h"
 
-void sw_init( void );
+int sw_init( void );
 
 
 // C implementation of
