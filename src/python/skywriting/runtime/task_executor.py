@@ -309,6 +309,37 @@ class SWInterpreterTaskExecutionRecord:
         self.is_running = False
         self.interpreter.abort()
         
+#class SWBLCRTaskExecutionRecord( SWExecutorTaskExecutionRecord ):
+#    
+#    def __init__(self, task_descriptor, task_executor):
+#        self.task_id = task_descriptor['task_id']
+#        self.task_executor = task_executor
+#        
+#        self.is_running = True
+#        self.is_fetching = False
+#        self.is_interpreting = False
+#        
+#    def execute(self):
+#        try:
+#            if self.is_running:
+#                cherrypy.engine.publish("worker_event", "Fetching checkpoint")
+#                self.interpreter.fetch_inputs(self.task_executor.block_store)
+#            if self.is_running:
+#                cherrypy.engine.publish("worker_event", "Starting checkpoint")
+#                self.interpreter.interpret()
+#            if self.is_running:
+#                cherrypy.engine.publish("worker_event", "Finished - (we should probs commit at some point)")
+#            else:
+#                self.task_executor.master_proxy.failed_task(self.task_id)
+#         
+#        except:
+#            cherrypy.log.error('Error during BLCR task execution', 'BLCR', logging.ERROR, True)
+#            self.task_executor.master_proxy.failed_task(self.task_id, 'RUNTIME_EXCEPTION')    
+#
+#    def abort(self):
+#        self.is_running = False
+#        self.interpreter.abort()
+        
 class SWRuntimeInterpreterTask:
     
     def __init__(self, task_descriptor, block_store, execution_features, master_proxy): # scheduler, task_expr, is_root=False, result_ref_id=None, result_ref_id_list=None, context=None, condvar=None):

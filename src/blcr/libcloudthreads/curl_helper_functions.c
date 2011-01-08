@@ -16,7 +16,7 @@ size_t WriteMemoryCallback(void *ptr, size_t size, size_t nmemb, void *data)
   mem->memory = realloc(mem->memory, mem->size + realsize + 1);
   if (mem->memory == NULL) {
     /* out of memory! */
-    printf("not enough memory (realloc returned NULL)\n");
+    perror("not enough memory (realloc returned NULL)\n");
     exit(EXIT_FAILURE);
   }
 
@@ -36,10 +36,9 @@ size_t ReadMemoryCallback(void *ptr, size_t size, size_t nmemb, void *data)
   // Make sure we don't read any more than we're supposed to
   if(bytecount > (mem->size-mem->offset)) bytecount = mem->size-mem->offset;
 
-  memcpy(&(mem->memory[mem->offset]), ptr, bytecount);
+  memcpy(ptr, &(mem->memory[mem->offset]), bytecount);
   mem->offset += bytecount;
-  mem->memory[mem->size] = 0;
 
-  return (mem->size-mem->offset);
+  return bytecount;
 }
 

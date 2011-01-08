@@ -47,16 +47,16 @@
 
 1293044178 /home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/libcloudthreads/sw_blcr_glue.h
 
-1293046428 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/curl_helper_functions.c
+1294516261 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/curl_helper_functions.c
 	<stdio.h>
 	<stdlib.h>
 	<string.h>
 	<curl/curl.h>
 	"curl_helper_functions.h"
 
-1293046428 /home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/curl_helper_functions.h
+1294516023 /home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/curl_helper_functions.h
 
-1293589160 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/sw_interface.c
+1294515113 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/sw_interface.c
 	<stdio.h>
 	<stdlib.h>
 	<string.h>
@@ -65,6 +65,7 @@
 	<sys/types.h>
 	<sys/stat.h>
 	<unistd.h>
+	"sw_interface.h"
 	"curl_helper_functions.h"
 
 1293046973 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/tests/helloworld.c

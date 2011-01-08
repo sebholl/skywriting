@@ -45,7 +45,7 @@ int blcr_init_framework( void ){
     return 1;
 }
 
-int blcr_spawn_function( const unsigned char *filepath, void(*fptr)(void), void(*fptr2)(void) ){
+int blcr_spawn_function( const char *filepath, void(*fptr)(void), void(*fptr2)(void) ){
 
     int result;
 
@@ -73,6 +73,10 @@ int blcr_spawn_function( const unsigned char *filepath, void(*fptr)(void), void(
             fptr();
             fptr2();
             exit(0);
+            break;
+        case blcr_error:
+            // do nothing, but silences compiler warning
+            // error will be detected below
             break;
     }
 
@@ -115,16 +119,16 @@ static int blcr_callback(void *arg)
     return 0;
 }
 
-unsigned char* blcr_generate_context_filename(void)
+char* blcr_generate_context_filename(void)
 {
-    unsigned char *p, *context_filename;
+    char *p, *context_filename;
 
-    if ( (p = (unsigned char *) getcwd(NULL, 0)) == NULL) return NULL;
+    if ( (p = getcwd(NULL, 0)) == NULL) return NULL;
 
     asprintf( &context_filename, "%s/context.%d.%d", p, getpid(), checkpoint_count );
 
     free(p);
 
-    return context_filename;
+    return (char *)context_filename;
 }
 

@@ -59,7 +59,9 @@ class ExecutionFeatures:
                           'dotnet': DotNetExecutor,
                           'c': CExecutor,
                           'grab': GrabURLExecutor,
-                          'sync': SyncExecutor}
+                          'sync': SyncExecutor,
+                          'blcr': BLCRExecutor,
+                          'papp': PackagedAppExecutor}
     
     def all_features(self):
         return self.executors.keys()
@@ -207,6 +209,7 @@ class ProcessRunningExecutor(SWExecutor):
             raise MissingInputException(failure_bindings)
 
         if rc != 0:
+            cherrypy.log.error( "Process terminated with non-zero return code (%s)." % rc, "EXEC", logging.ERROR )
             raise OSError()
         cherrypy.engine.publish("worker_event", "Executor: Storing outputs")
         for i, filename in enumerate(file_outputs):
@@ -387,8 +390,8 @@ class FilenamesOnStdinExecutor(ProcessRunningExecutor):
                         anything_read = True
                     if c == ",":
                         if message[0] == "C":
-                           timestamp = float(message[1:])
-                           cherrypy.engine.publish("worker_event", "Process log %f Computing" % timestamp)
+                            timestamp = float(message[1:])
+                            cherrypy.engine.publish("worker_event", "Process log %f Computing" % timestamp)
                         elif message[0] == "I":
                             try:
                                 params = message[1:].split("|")
@@ -443,13 +446,88 @@ class JavaExecutor(FilenamesOnStdinExecutor):
 
     def get_process_args(self):
         cp = os.getenv('CLASSPATH',"/local/scratch/dgm36/eclipse/workspace/mercator.hg/src/java/JavaBindings.jar")
-        process_args = ["java", "-cp", cp]
+        process_args = ["strace", "java", "-cp", cp]
         if "trace_io" in self.debug_opts:
             process_args.append("-Dskywriting.trace_io=1")
         process_args.extend(["uk.co.mrry.mercator.task.JarTaskLoader", self.class_name])
         process_args.extend(["file://" + x for x in self.jar_filenames])
         return process_args
         
+class BLCRExecutor(ProcessRunningExecutor):
+
+
+    def __init__(self, args, continuation, expected_output_ids, master_proxy, fetch_limit=None):
+        ProcessRunningExecutor.__init__(self, args, continuation, expected_output_ids, master_proxy, fetch_limit)
+        try:
+            self.checkpoint_ref = args['checkpoint']
+        except KeyError:
+            raise BlameUserException('Incorrect arguments to the BLCR executor: %s' % repr(args))
+
+    def before_execute(self, block_store):
+        cherrypy.log.error("Running BLCR executor for checkpoint: %s" % self.checkpoint_url, "BLCR", logging.INFO)
+        cherrypy.engine.publish("worker_event", "BLCR: fetching checkpoint")
+        self.checkpoint_filenames = self.get_filenames_eager(block_store, [self.checkpoint_ref])
+        
+    def start_process(self, block_store, input_files, output_files, transfer_ctx):
+
+        self.before_execute(block_store)
+        cherrypy.engine.publish("worker_event", "Executor: running")
+
+        proc = subprocess.Popen(self.get_process_args(), shell=False, close_fds=True)
+        
+        transfer_ctx.consumers_attached()
+        
+        #TODO: Open shared pipe and pipe environment variables.
+
+        return proc
+
+    def get_process_args(self):
+        return ["cr_restart", self.checkpoint_filename ]
+
+class PackagedAppExecutor(ProcessRunningExecutor):
+
+    def __init__(self, args, continuation, expected_output_ids, master_proxy, fetch_limit=None):
+        ProcessRunningExecutor.__init__(self, args, continuation, expected_output_ids, master_proxy, fetch_limit)
+        self.env = os.environ.copy()
+        self.env['SW_MASTER_URL'] = master_proxy.master_url
+        try:
+            self.url = args['app_refs']
+        except KeyError:
+            raise BlameUserException('Incorrect arguments to the PackagedAppExecutor: %s' % repr(args))
+    
+    def start_process(self, block_store, input_files, output_files, transfer_ctx):
+
+        self.before_execute(block_store)
+        cherrypy.engine.publish("worker_event", "Executor: running")
+        
+        print self.env
+        
+        proc = subprocess.Popen(self.get_process_args(), shell=False, close_fds=True, env=self.env)
+        
+        proc.wait();
+        
+        print 'Process return code: %s' % proc.returncode
+        
+        #TODO: Open shared pipe and pipe environment variables.
+
+        return proc
+    
+    def _execute(self, block_store, task_id):
+        self.env['SW_WORKER_URL'] = block_store.netloc
+        self.env['SW_TASK_ID'] = task_id
+        
+        return ProcessRunningExecutor._execute(self, block_store, task_id)
+    
+    def before_execute(self, block_store):
+        cherrypy.log.error("Running PackagedApp executor for : %s" % self.url, "PackagedAppExecutor", logging.INFO)
+        cherrypy.engine.publish("worker_event", "PackagedAppExecutor: fetching app")
+        self.filenames = self.get_filenames_eager(block_store, self.url)
+
+    def get_process_args(self):
+        cherrypy.log.error("PackagedAppExecutor package path : %s" % self.filenames, "PackagedAppExecutor", logging.INFO)
+        return self.filenames
+
+
 class DotNetExecutor(FilenamesOnStdinExecutor):
 
     def __init__(self, args, continuation, expected_output_ids, master_proxy, fetch_limit=None):

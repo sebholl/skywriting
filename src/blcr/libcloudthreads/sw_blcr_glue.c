@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 
 #include "blcr_interface.h"
 #include "sw_interface.h"
@@ -17,13 +18,13 @@ int sw_blcr_init( void ){
 void sw_blcr_update_env( void ){
 
     FILE *named_pipe;
-    unsigned char *path, *task_id;
-    unsigned char env_name[2048], env_value[2048];
+    const char *task_id;
+    char *path;
+    char env_name[2048], env_value[2048];
 
     task_id = sw_get_current_task_id();
 
     asprintf( &path, "/tmp/%s", task_id ); //Actually the parent task ID at this point
-    free(task_id);
 
     printf( "Opening named FIFO \"%s\".\n", path );
 
@@ -46,9 +47,11 @@ int sw_blcr_spawnthread( void(*fptr)(void) ){
 
     int result;
 
-    unsigned char *checkpoint_resource;
-    unsigned char *dependencies;
-    unsigned char *path;
+    int chkpt_size;
+
+    char *checkpoint_resource;
+    char *dependencies;
+    char *path;
 
     path = blcr_generate_context_filename();
 
@@ -58,7 +61,19 @@ int sw_blcr_spawnthread( void(*fptr)(void) ){
 
         checkpoint_resource = sw_post_file_to_worker( sw_get_current_worker_url(), path );
 
-        asprintf( &dependencies, "\"checkpoint\": \"%s\"", checkpoint_resource );
+        {
+            struct stat buf;
+
+            if( stat(path, &buf)==-1 ){
+                perror("sw_blcr_spawnthread: cannot retrieve checkpoint filesize");
+                return result;
+            }
+
+            chkpt_size = buf.st_size;
+
+        }
+
+        asprintf( &dependencies, "\"checkpoint\": {\"__ref__\": [\"c2\", \"%s\", %d, [\"%s\"]]}", checkpoint_resource, chkpt_size, sw_get_current_worker_url() );
 
         free(checkpoint_resource);
 
