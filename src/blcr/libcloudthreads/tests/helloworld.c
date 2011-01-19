@@ -23,7 +23,7 @@ void my_thread(void)
 {
     int count = 1;
 
-    while(1){
+    while(count < 10){
         printf( "%p: Hello World!\n", (void*)count++ );
         sleep(1);
     }

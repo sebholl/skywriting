@@ -24,7 +24,7 @@ from skywriting.lang import ast
 from skywriting.runtime.exceptions import ReferenceUnavailableException,\
     FeatureUnavailableException, ExecutionInterruption,\
     SelectException, MissingInputException, MasterNotRespondingException,\
-    RuntimeSkywritingError, BlameUserException
+    BlameUserException
 from threading import Lock
 import cherrypy
 import logging
@@ -37,12 +37,12 @@ from skywriting.runtime.references import SWDataValue, SWURLReference,\
 
 class TaskExecutorPlugin(AsynchronousExecutePlugin):
     
-    def __init__(self, bus, block_store, master_proxy, execution_features, num_threads=1):
+    def __init__(self, bus, block_store, master_proxy, execution_features, execution_task_record_types, num_threads=1):
         AsynchronousExecutePlugin.__init__(self, bus, num_threads, "execute_task")
         self.block_store = block_store
         self.master_proxy = master_proxy
         self.execution_features = execution_features
-    
+        self.execution_task_record_types = execution_task_record_types
         self.current_task_id = None
         self.current_task_execution_record = None
     
@@ -66,10 +66,7 @@ class TaskExecutorPlugin(AsynchronousExecutePlugin):
     def handle_input(self, input):
         handler = input['handler']
 
-        if handler == 'swi':
-            execution_record = SWInterpreterTaskExecutionRecord(input, self)
-        else:
-            execution_record = SWExecutorTaskExecutionRecord(input, self)
+        execution_record = self.execution_task_record_types.get(handler, SWExecutorTaskExecutionRecord )(input, self)
 
         with self._lock:
             self.current_task_id = input['task_id']

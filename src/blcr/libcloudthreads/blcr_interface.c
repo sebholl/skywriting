@@ -11,9 +11,13 @@
 
 #include "blcr_interface.h"
 
+/* Checkpointing Flags */
+int BLCR_CRFLAGS = CR_CHKPT_PTRACED_ALLOW|CR_CHKPT_DUMP_ALL;
+int BLCR_CRSCOPE = CR_SCOPE_PROC; /* See blcr_common.h */
+
 /* Enums and global variables */
 
-int checkpoint_count = 0;
+static int checkpoint_count = 0;
 static enum blcr_state blcr_checkpoint_status = blcr_error;
 
 static int blcr_callback(void *arg);
@@ -45,7 +49,7 @@ int blcr_init_framework( void ){
     return 1;
 }
 
-int blcr_spawn_function( const char *filepath, void(*fptr)(void), void(*fptr2)(void) ){
+int blcr_checkpoint( const char *filepath, void(*fptr)(void), void(*fptr2)(void) ){
 
     int result;
 
@@ -54,11 +58,10 @@ int blcr_spawn_function( const char *filepath, void(*fptr)(void), void(*fptr2)(v
 
     cr_initialize_checkpoint_args_t( &args );
 
-	args.cr_flags |= CR_CHKPT_PTRACED_ALLOW|CR_CHKPT_DUMP_ALL;
+	args.cr_flags |= BLCR_CRFLAGS;
 
-    args.cr_scope = CR_SCOPE_PROC;  // See blcr_common.h
+    args.cr_scope = BLCR_CRSCOPE;
 
-    //args.cr_fd = fopen(filepath, "wb");
     args.cr_fd = open( (const char *) filepath, O_WRONLY | O_CREAT | O_TRUNC , 0600);
 
     blcr_checkpoint_status = blcr_error;
@@ -70,13 +73,21 @@ int blcr_spawn_function( const char *filepath, void(*fptr)(void), void(*fptr2)(v
             cr_wait_checkpoint( &hndl, NULL );
             break;
         case blcr_restart:
+            printf("Executing fptr()\n");
             fptr();
-            fptr2();
-            exit(0);
+            printf("Finished fptr()\n");
+            if(fptr2!=NULL){
+                printf("Executing fptr2()\n");
+                fptr2();
+                printf("Finished fptr2()\n");
+                exit(EXIT_SUCCESS);
+            } else {
+                return -1;
+            }
             break;
         case blcr_error:
-            // do nothing, but silences compiler warning
-            // error will be detected below
+            /* Do nothing, but silences missing case compiler warning.
+             * Instead, all errors will be detected below.             */
             break;
     }
 
@@ -92,7 +103,9 @@ int blcr_spawn_function( const char *filepath, void(*fptr)(void), void(*fptr2)(v
         }
     }
 
-    //printf("Checkpointed with return value: %d (errorno: %d).\n", blcr_checkpoint_status, errno );
+    /*
+    printf("Checkpointed with return value: %d (errorno: %d).\n", blcr_checkpoint_status, errno );
+    */
 
     return ( (result==0) && (blcr_checkpoint_status!=blcr_error) );
 
@@ -119,7 +132,7 @@ static int blcr_callback(void *arg)
     return 0;
 }
 
-char* blcr_generate_context_filename(void)
+char *blcr_generate_context_filename(void)
 {
     char *p, *context_filename;
 

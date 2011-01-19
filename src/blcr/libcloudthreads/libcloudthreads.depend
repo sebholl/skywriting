@@ -47,7 +47,7 @@
 
 1293044178 /home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/libcloudthreads/sw_blcr_glue.h
 
-1294516261 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/curl_helper_functions.c
+1294814039 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/curl_helper_functions.c
 	<stdio.h>
 	<stdlib.h>
 	<string.h>
@@ -56,7 +56,7 @@
 
 1294516023 /home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/curl_helper_functions.h
 
-1294515113 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/sw_interface.c
+1294815995 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/sw_interface.c
 	<stdio.h>
 	<stdlib.h>
 	<string.h>
@@ -74,9 +74,9 @@
 	<unistd.h>
 	"../sw_blcr_glue.h"
 
-1293044178 /home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/sw_blcr_glue.h
+1294812186 /home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/sw_blcr_glue.h
 
-1293581988 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/blcr_interface.c
+1294814512 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/blcr_interface.c
 	<stdio.h>
 	<stdlib.h>
 	<unistd.h>
@@ -87,15 +87,16 @@
 	<errno.h>
 	"blcr_interface.h"
 
-1293581888 /home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/blcr_interface.h
+1294814510 /home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/blcr_interface.h
 
-1293581888 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/sw_blcr_glue.c
+1294816412 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/sw_blcr_glue.c
 	<stdio.h>
 	<stdlib.h>
+	<sys/stat.h>
 	"blcr_interface.h"
 	"sw_interface.h"
 
-1293581888 /home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/sw_interface.h
+1294815919 /home/sebhollington/Desktop/SkyWriting/skywriting/src/blcr/libcloudthreads/sw_interface.h
 	<stdio.h>
 	<curl/curl.h>
 	<openssl/sha.h>

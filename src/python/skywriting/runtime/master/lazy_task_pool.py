@@ -205,7 +205,7 @@ class LazyTaskPool(plugins.SimplePlugin):
                 return
             self.ref_for_output[global_id] = combined_ref
         except KeyError:
-            if ref.is_consumable():
+            if (ref is not None) and (ref.is_consumable()):
                 self.ref_for_output[global_id] = ref
             else:
                 return

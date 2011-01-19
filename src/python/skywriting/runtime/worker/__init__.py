@@ -20,10 +20,11 @@ Created on 4 Feb 2010
 @author: dgm36
 '''
 from skywriting.runtime.worker.master_proxy import MasterProxy
-from skywriting.runtime.task_executor import TaskExecutorPlugin
+from skywriting.runtime.task_executor import TaskExecutorPlugin, SWInterpreterTaskExecutionRecord
 from skywriting.runtime.block_store import BlockStore
 from skywriting.runtime.worker.worker_view import WorkerRoot
 from skywriting.runtime.executors import ExecutionFeatures
+from skywriting.runtime.blcr import BLCRExecutor, SWBLCRExecutor, BLCRTaskExecutionRecord
 from skywriting.runtime.worker.pinger import Pinger
 from cherrypy.process import plugins
 import logging
@@ -63,8 +64,16 @@ class Worker(plugins.SimplePlugin):
         self.upload_deferred_work = DeferredWorkPlugin(bus, 'upload_work')
         self.upload_deferred_work.subscribe()
         self.upload_manager = UploadManager(self.block_store, self.upload_deferred_work)
+        
+        
         self.execution_features = ExecutionFeatures()
-        self.task_executor = TaskExecutorPlugin(bus, self.block_store, self.master_proxy, self.execution_features, 1)
+        self.execution_features.register_executor('sw-blcr', SWBLCRExecutor)
+        self.execution_features.register_executor('blcr', None )
+        
+        self.execution_record_types = {'swi': SWInterpreterTaskExecutionRecord,
+                                       'blcr': BLCRTaskExecutionRecord }
+        
+        self.task_executor = TaskExecutorPlugin(bus, self.block_store, self.master_proxy, self.execution_features, self.execution_record_types, 1)
         self.task_executor.subscribe()
         self.server_root = WorkerRoot(self)
         self.pinger = Pinger(bus, self.master_proxy, None, 30)
@@ -74,12 +83,12 @@ class Worker(plugins.SimplePlugin):
         self.log_lock = Lock()
         self.log_condition = Condition(self.log_lock)
 
-        self.cherrypy_conf = {}
-    
+        self.cherrypy_conf = { "/skyweb": { "log.screen": True }, "/stdlib": { "log.screen": True }  }
+        
         if options.staticbase is not None:
-            self.cherrypy_conf["/skyweb"] = { "tools.staticdir.on": True, "tools.staticdir.dir": options.staticbase }
+            self.cherrypy_conf["/skyweb"] = { "log.screen": True, "tools.staticdir.on": True, "tools.staticdir.dir": options.staticbase }
         if options.lib is not None:
-            self.cherrypy_conf["/stdlib"] = { "tools.staticdir.on": True, "tools.staticdir.dir": options.lib }
+            self.cherrypy_conf["/stdlib"] = { "log.screen": True, "tools.staticdir.on": True, "tools.staticdir.dir": options.lib }
 
 
 
@@ -105,9 +114,15 @@ class Worker(plugins.SimplePlugin):
         self.pinger.poke()
 
     def start_running(self):
-
         cherrypy.engine.start()
-        cherrypy.tree.mount(self.server_root, "", self.cherrypy_conf)
+        application = cherrypy.tree.mount(self.server_root, "", self.cherrypy_conf)
+        cherrypy.config.update({'log.screen': True})
+        
+        error_log = logging.getLogger("cherrypy.error")
+        access_log = logging.getLogger("cherrypy.access")
+        error_log.setLevel(logging.DEBUG)
+        access_log.setLevel(logging.DEBUG)
+ 
         if hasattr(cherrypy.engine, "signal_handler"):
             cherrypy.engine.signal_handler.subscribe()
         if hasattr(cherrypy.engine, "console_control_handler"):

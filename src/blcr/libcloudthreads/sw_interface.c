@@ -15,6 +15,62 @@
 
 int spawn_count = 0;
 
+char *sw_post_string_to_worker( const char *worker_url, const char *data ){
+
+    struct MemoryStruct post_data;
+
+    char *post_url;
+    char *id;
+
+    CURLcode result;
+    CURL *handle;
+
+    struct curl_slist *chunk;
+
+    post_data.memory = (char *)data;
+    post_data.size = strlen( data );
+    post_data.offset = 0;
+
+    handle = curl_easy_init();
+
+    curl_easy_setopt( handle, CURLOPT_POST, 1 );
+
+    curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
+
+    curl_easy_setopt( handle, CURLOPT_READDATA, &post_data );
+    curl_easy_setopt( handle, CURLOPT_READFUNCTION, ReadMemoryCallback );
+
+    curl_easy_setopt( handle, CURLOPT_POSTFIELDSIZE, post_data.size );
+
+    id = sw_get_new_task_id( sw_get_current_task_id() );
+
+    asprintf( &post_url, "%s/data/%s/", worker_url, id );
+    printf("Uploading data to \"%s\".\n", post_url );
+
+    curl_easy_setopt( handle, CURLOPT_URL, post_url );
+    free( post_url );
+
+    chunk = NULL;
+    chunk = curl_slist_append( chunk, "Content-Type: identity" );
+    curl_easy_setopt( handle, CURLOPT_HTTPHEADER, chunk );
+
+    result = curl_easy_perform( handle );
+
+    curl_easy_cleanup( handle );
+    curl_slist_free_all( chunk );
+
+    if(result!=CURLE_OK){
+
+        printf( "sw_post_data_to_worker(): error during upload: %s\n", curl_easy_strerror(result) );
+        if(id!=NULL) free( id );
+        return NULL;
+
+    }
+
+    return id;
+
+}
+
 char *sw_post_file_to_worker( const char *worker_url, const char *filepath ){
 
     char *post_url;
@@ -23,6 +79,8 @@ char *sw_post_file_to_worker( const char *worker_url, const char *filepath ){
 
     CURLcode result;
     CURL *handle;
+
+    struct curl_slist *chunk;
 
     fd = fopen( filepath, "rb" );
 
@@ -60,11 +118,13 @@ char *sw_post_file_to_worker( const char *worker_url, const char *filepath ){
 
     curl_easy_setopt( handle, CURLOPT_READDATA, fd );
 
-    //curl_easy_setopt( handle, CURLOPT_WRITEFUNCTION, &WriteMemoryCallback );
-    //curl_easy_setopt( handle, CURLOPT_WRITEDATA, &url );
-    //curl_easy_setopt( handle, CURLOPT_WRITEDATA,  fopen("test.txt","w") );
+    /*
+    curl_easy_setopt( handle, CURLOPT_WRITEFUNCTION, &WriteMemoryCallback );
+    curl_easy_setopt( handle, CURLOPT_WRITEDATA, &url );
+    curl_easy_setopt( handle, CURLOPT_WRITEDATA,  fopen("test.txt","w") );
+    */
 
-    struct curl_slist *chunk = NULL;
+    chunk = NULL;
     chunk = curl_slist_append( chunk, "Content-Type: identity" );
     curl_easy_setopt( handle, CURLOPT_HTTPHEADER, chunk );
 
@@ -87,7 +147,7 @@ char *sw_post_file_to_worker( const char *worker_url, const char *filepath ){
 
 }
 
-char *sw_sha1_hex_digest_from_bytes( const char *bytes, unsigned int len ){
+char *sw_sha1_hex_digest_from_bytes( const char *bytes, unsigned int len, int shouldFreeInput ){
 
     char *result;
     int hexlen, i;
@@ -101,6 +161,8 @@ char *sw_sha1_hex_digest_from_bytes( const char *bytes, unsigned int len ){
 
     for (i = 0; i < SHA_DIGEST_LENGTH; i++) sprintf( &result[i<<1], "%02x", hash[i]);
 
+    if(shouldFreeInput) free( (char *)bytes );
+
     return result;
 
 }
@@ -112,7 +174,8 @@ char *sw_get_new_task_id( const char *current_task_id ){
 
     len = asprintf( &str, "%s:%d", current_task_id, ++spawn_count );
 
-    return sw_sha1_hex_digest_from_bytes( str, len );
+    return str;
+    //return sw_sha1_hex_digest_from_bytes( str, len, 1 );
 
 }
 
@@ -121,11 +184,10 @@ char *sw_get_new_output_id( const char *handler, const char *task_id ){
     char *str;
     int len;
 
-    len = asprintf( &str, "%s:%s", handler, task_id );
+    len = asprintf( &str, "%s:%s:out", handler, task_id );
 
-    free( str );
-
-    return sw_sha1_hex_digest_from_bytes( str, len );
+    return str;
+    //return sw_sha1_hex_digest_from_bytes( str, len, 1 );
 
 }
 
@@ -137,45 +199,47 @@ int sw_init( void ){
 
 }
 
-//
-
-// C implementation of
-//   src/python/skywriting/runtime/task_executor.py
-//   spawn_func( self, spawn_expre, args )
-char *sw_create_json_task_descriptor( const char* current_task_id, const char *handler, const char *jsonenc_dependencies ){
+/* C implementation of
+ *   src/python/skywriting/runtime/task_executor.py
+ *   spawn_func( self, spawn_expre, args )
+ */
+char *sw_create_json_task_descriptor( const char *new_task_id,
+                                      const char *output_task_id,
+                                      const char *current_task_id,
+                                      const char *handler,
+                                      const char *jsonenc_dependencies,
+                                      int is_continuation ){
 
     char *jsondesc;
-    char *new_task_id;
-    char *output_task_id;
-
-    new_task_id = sw_get_new_task_id( current_task_id );
-    output_task_id = sw_get_new_output_id( handler, new_task_id );
 
     asprintf( &jsondesc, "{\"task_id\": \"%s\","
                          " \"handler\": \"%s\","
-                         " \"dependencies\": {%s},"
-    //                   " \"parent\": \"%s\","
-                         " \"expected_outputs\": [\"%s\"] }",
+                         " \"dependencies\": %s,"
+                         " \"expected_outputs\": [\"%s\"],"
+                         " \"%s\": \"%s\" }",
 
                         new_task_id,
                         handler,
                         jsonenc_dependencies,
-   //                   current_task_id,
-                        output_task_id );
-
-    free( new_task_id );
-    free( output_task_id );
+                        output_task_id,
+                        (is_continuation ? "continues_task" : "parent" ), current_task_id );
 
     return jsondesc;
 
 }
 
 
-// C implementation of
-//   src/python/skywriting/runtime/worker/master_proxy.py
-//   spawn_tasks( self, parent_task_id, tasks )
-
-int sw_spawntasks( const char *master_url, const char *parent_task_id, const char *handler, const char *dependencies ){
+/* C implementation of
+ *   src/python/skywriting/runtime/worker/master_proxy.py
+ *   spawn_tasks( self, parent_task_id, tasks )
+ */
+int sw_spawntask( const char *new_task_id,
+                  const char *output_task_id,
+                  const char *master_url,
+                  const char *parent_task_id,
+                  const char *handler,
+                  const char *jsonenc_dependencies,
+                  int is_continuation ){
 
     struct MemoryStruct postdata;
 
@@ -186,21 +250,28 @@ int sw_spawntasks( const char *master_url, const char *parent_task_id, const cha
     CURLcode result;
     CURL *handle;
 
+    struct curl_slist *chunk;
+
     handle = curl_easy_init();
 
     curl_easy_setopt( handle, CURLOPT_POST, 1 );
     curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
 
-
     asprintf( &post_url, "%s/task/%s/spawn", (char *)master_url, (char *)parent_task_id );
     curl_easy_setopt( handle, CURLOPT_URL, post_url );
     free( post_url );
 
-    tmp = sw_create_json_task_descriptor( parent_task_id, handler, dependencies );
+    tmp = sw_create_json_task_descriptor( new_task_id,
+                                          output_task_id,
+                                          parent_task_id,
+                                          handler,
+                                          jsonenc_dependencies,
+                                          is_continuation );
+
+
     asprintf( &post_payload, "[%s]", (char *)tmp );
     free( tmp );
 
-    //curl_easy_setopt( handle, CURLOPT_POSTFIELDS, post_payload );
     curl_easy_setopt( handle, CURLOPT_POST, 1 );
     curl_easy_setopt( handle, CURLOPT_READFUNCTION, &ReadMemoryCallback );
 
@@ -211,7 +282,7 @@ int sw_spawntasks( const char *master_url, const char *parent_task_id, const cha
     curl_easy_setopt( handle, CURLOPT_POSTFIELDSIZE, postdata.size );
     curl_easy_setopt( handle, CURLOPT_READDATA, &postdata );
 
-    struct curl_slist *chunk = NULL;
+    chunk = NULL;
     chunk = curl_slist_append( chunk, "Content-Type: identity" );
     curl_easy_setopt( handle, CURLOPT_HTTPHEADER, chunk );
 
@@ -231,6 +302,11 @@ inline const char* sw_get_current_worker_url( void ){
     char *value = (char*)getenv( "SW_WORKER_URL" );
     return (value != NULL ? value : "http://localhost:9001" );
 
+}
+
+inline const char* sw_get_current_output_id( void ){
+    char *value = (char*)getenv( "SW_OUTPUT_ID" );
+    return (value != NULL ? value : "4321" );
 }
 
 inline const char* sw_get_current_task_id( void ){

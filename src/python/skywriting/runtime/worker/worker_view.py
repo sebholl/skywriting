@@ -139,6 +139,7 @@ class DataRoot:
         
     @cherrypy.expose
     def default(self, id):
+        print "defaultDataRoot"
         safe_id = id
         if cherrypy.request.method == 'GET':
             is_streaming, filename = self.block_store.maybe_streaming_filename(safe_id)
@@ -176,7 +177,9 @@ class DataRoot:
 
     @cherrypy.expose
     def index(self):
+        print "foundIndex"
         if cherrypy.request.method == 'POST':
+            print "in POST"
             id = self.block_store.allocate_new_id()
             self.block_store.store_raw_file(cherrypy.request.body, id)
             return simplejson.dumps(id)
