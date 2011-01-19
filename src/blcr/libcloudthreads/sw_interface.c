@@ -35,14 +35,14 @@ char *sw_post_string_to_worker( const char *worker_url, const char *data ){
 
     curl_easy_setopt( handle, CURLOPT_POST, 1 );
 
-    curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
+    //curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
 
     curl_easy_setopt( handle, CURLOPT_READDATA, &post_data );
     curl_easy_setopt( handle, CURLOPT_READFUNCTION, ReadMemoryCallback );
 
     curl_easy_setopt( handle, CURLOPT_POSTFIELDSIZE, post_data.size );
 
-    id = sw_get_new_task_id( sw_get_current_task_id() );
+    id = sw_get_new_task_id( sw_get_current_task_id(), "string" );
 
     asprintf( &post_url, "%s/data/%s/", worker_url, id );
     printf("Uploading data to \"%s\".\n", post_url );
@@ -93,7 +93,7 @@ char *sw_post_file_to_worker( const char *worker_url, const char *filepath ){
 
     curl_easy_setopt( handle, CURLOPT_POST, 1 );
 
-    curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
+    //curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
 
     {
         struct stat buf;
@@ -108,7 +108,7 @@ char *sw_post_file_to_worker( const char *worker_url, const char *filepath ){
 
     }
 
-    id = sw_get_new_task_id( sw_get_current_task_id() );
+    id = sw_get_new_task_id( sw_get_current_task_id(), "file" );
 
     asprintf( &post_url, "%s/data/%s/", worker_url, id );
     printf("Uploading file \"%s\" to \"%s\".\n", filepath, post_url );
@@ -167,27 +167,39 @@ char *sw_sha1_hex_digest_from_bytes( const char *bytes, unsigned int len, int sh
 
 }
 
-char *sw_get_new_task_id( const char *current_task_id ){
+char *sw_get_new_task_id( const char *current_task_id, const char *task_type ){
 
     char *str;
+    char *result;
     int len;
 
     len = asprintf( &str, "%s:%d", current_task_id, ++spawn_count );
 
-    return str;
-    //return sw_sha1_hex_digest_from_bytes( str, len, 1 );
+    str = sw_sha1_hex_digest_from_bytes( str, len, 1 );
+
+    asprintf( &result, "%s:%s", str, task_type );
+
+    free( str );
+
+    return result;
 
 }
 
 char *sw_get_new_output_id( const char *handler, const char *task_id ){
 
     char *str;
+    char *result;
     int len;
 
-    len = asprintf( &str, "%s:%s:out", handler, task_id );
+    len = asprintf( &str, "%s:%s", handler, task_id );
 
-    return str;
-    //return sw_sha1_hex_digest_from_bytes( str, len, 1 );
+    str = sw_sha1_hex_digest_from_bytes( str, len, 1 );
+
+    asprintf( &result, "%s:output", str );
+
+    free( str );
+
+    return result;
 
 }
 
@@ -255,7 +267,7 @@ int sw_spawntask( const char *new_task_id,
     handle = curl_easy_init();
 
     curl_easy_setopt( handle, CURLOPT_POST, 1 );
-    curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
+    //curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
 
     asprintf( &post_url, "%s/task/%s/spawn", (char *)master_url, (char *)parent_task_id );
     curl_easy_setopt( handle, CURLOPT_URL, post_url );

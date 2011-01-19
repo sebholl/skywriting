@@ -24,15 +24,12 @@ static inline void strip_new_line( char *string ){
 void sw_blcr_update_env( void ){
 
     FILE *named_pipe;
-    const char *task_id;
     char *path;
     char env_name[2048], env_value[2048];
 
-    /* Retrieve the current task id (which is actually the parent
+    /* Retrieve the saved task id (which is actually the parent
      * task id at this point.                                      */
-    task_id = sw_get_current_task_id();
-
-    asprintf( &path, "/tmp/%s", task_id );
+    asprintf( &path, "/tmp/%s", sw_get_current_task_id() );
 
     printf( "Opening named FIFO \"%s\".\n", path );
 
@@ -62,11 +59,11 @@ int sw_blcr_flushthreads( const char *thread_id ){
 
     char *path;
 
-    path = blcr_generate_context_filename();
+    asprintf( &path, "%s.checkpoint.continuation", sw_get_current_task_id() );
 
     result = blcr_checkpoint( path, sw_blcr_update_env, NULL );
 
-    if( result != 0 ){
+    if( result > 0 ){
 
         int args_size;
         int chkpt_size;
@@ -103,7 +100,7 @@ int sw_blcr_flushthreads( const char *thread_id ){
 
         free( jsonenc_args );
 
-        asprintf( &jsonenc_dpnds, "{\"_thread\": {\"__ref__\": [\"f2\", \"%s\"]},"
+        asprintf( &jsonenc_dpnds, "{\"thread_output\": {\"__ref__\": [\"f2\", \"%s\"]},"
                                   " \"_args\": {\"__ref__\": [\"c2\", \"%s\", %d, [\"%s\"]]} }",
                                   thread_id,
                                   args_id, args_size, sw_get_current_worker_url() );
@@ -111,7 +108,7 @@ int sw_blcr_flushthreads( const char *thread_id ){
         free( args_id );
 
         /* Create values for the new continuation task */
-        cont_task_id = sw_get_new_task_id( sw_get_current_task_id() );
+        cont_task_id = sw_get_new_task_id( sw_get_current_task_id(), "cont" );
 
         /* Attempt to POST a new task to CIEL */
         result = sw_spawntask( cont_task_id,
@@ -147,7 +144,7 @@ int sw_blcr_spawnthread( void(*fptr)(void) ){
 
     char *path;
 
-    path = blcr_generate_context_filename();
+    asprintf( &path, "%s.checkpoint.thread", sw_get_current_output_id() );
 
     result = -1;
 
@@ -194,7 +191,7 @@ int sw_blcr_spawnthread( void(*fptr)(void) ){
         free( args_id );
 
         /* Create values for the new task */
-        thread_task_id = sw_get_new_task_id( sw_get_current_task_id() );
+        thread_task_id = sw_get_new_task_id( sw_get_current_task_id(), "thread" );
         thread_output_id = sw_get_new_output_id( "blcr", thread_task_id );
 
 

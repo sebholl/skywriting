@@ -25,7 +25,7 @@ char *sw_post_string_to_worker( const char *worker_url, const char *data );
 char *sw_post_file_to_worker( const char *worker_url, const char *filepath );
 
 
-char *sw_get_new_task_id( const char *current_task_id );
+char *sw_get_new_task_id( const char *current_task_id, const char *task_type );
 
 char *sw_get_new_output_id( const char *handler, const char *task_id );
 

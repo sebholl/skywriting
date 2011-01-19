@@ -56,6 +56,8 @@ int blcr_checkpoint( const char *filepath, void(*fptr)(void), void(*fptr2)(void)
     cr_checkpoint_args_t args;
     cr_checkpoint_handle_t hndl;
 
+    printf( "Checkpointing process as %s.", (fptr2!=NULL) ? "thread" : "continuation" );
+
     cr_initialize_checkpoint_args_t( &args );
 
 	args.cr_flags |= BLCR_CRFLAGS;
@@ -66,7 +68,13 @@ int blcr_checkpoint( const char *filepath, void(*fptr)(void), void(*fptr2)(void)
 
     blcr_checkpoint_status = blcr_error;
 
+    /* Flush any data waiting in STDOUT or STDERR because
+     * we don't really want 2 copies after checkpoint. */
+    fflush(stdout);fflush(stderr);
+
     result = cr_request_checkpoint( &args, &hndl );
+
+    close(args.cr_fd);
 
     switch(blcr_checkpoint_status){
         case blcr_continue:
@@ -90,8 +98,6 @@ int blcr_checkpoint( const char *filepath, void(*fptr)(void), void(*fptr2)(void)
              * Instead, all errors will be detected below.             */
             break;
     }
-
-    close(args.cr_fd);
 
     /* Error displaying code from cr_checkpoint.c */
 

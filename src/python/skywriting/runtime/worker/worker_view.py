@@ -12,7 +12,6 @@
 # ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 from skywriting.runtime.executors import kill_all_running_children
-from skywriting.runtime.references import SW2_FetchReference
 import logging
 
 '''
@@ -26,8 +25,6 @@ from skywriting.runtime.block_store import json_decode_object_hook,\
 import sys
 import simplejson
 import cherrypy
-import os
-import time
 
 class WorkerRoot:
     
@@ -139,7 +136,6 @@ class DataRoot:
         
     @cherrypy.expose
     def default(self, id):
-        print "defaultDataRoot"
         safe_id = id
         if cherrypy.request.method == 'GET':
             is_streaming, filename = self.block_store.maybe_streaming_filename(safe_id)
@@ -177,9 +173,7 @@ class DataRoot:
 
     @cherrypy.expose
     def index(self):
-        print "foundIndex"
         if cherrypy.request.method == 'POST':
-            print "in POST"
             id = self.block_store.allocate_new_id()
             self.block_store.store_raw_file(cherrypy.request.body, id)
             return simplejson.dumps(id)
