@@ -49,14 +49,12 @@ int blcr_init_framework( void ){
     return 1;
 }
 
-int blcr_checkpoint( const char *filepath, void(*fptr)(void), void(*fptr2)(void) ){
+int blcr_checkpoint( const char *filepath ){
 
     int result;
 
     cr_checkpoint_args_t args;
     cr_checkpoint_handle_t hndl;
-
-    printf( "Checkpointing process as %s.", (fptr2!=NULL) ? "thread" : "continuation" );
 
     cr_initialize_checkpoint_args_t( &args );
 
@@ -81,17 +79,7 @@ int blcr_checkpoint( const char *filepath, void(*fptr)(void), void(*fptr2)(void)
             cr_wait_checkpoint( &hndl, NULL );
             break;
         case blcr_restart:
-            printf("Executing fptr()\n");
-            fptr();
-            printf("Finished fptr()\n");
-            if(fptr2!=NULL){
-                printf("Executing fptr2()\n");
-                fptr2();
-                printf("Finished fptr2()\n");
-                exit(EXIT_SUCCESS);
-            } else {
-                return -1;
-            }
+            return -1;
             break;
         case blcr_error:
             /* Do nothing, but silences missing case compiler warning.

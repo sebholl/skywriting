@@ -119,6 +119,8 @@ class _BLCRCommonExecutor(SWExecutor):
             if rc == 0:
                 cherrypy.engine.publish("worker_event", "Executor: PackagedApp exited successfully")
                 # XXX: fix size_hint and related.
+                block_store.store_object(True, 'json', self.output_ids[0])
+                
                 real_ref = SW2_ConcreteReference(self.output_ids[0], 0)
                 real_ref.add_location_hint(block_store.netloc)
                 self.output_refs[0] = real_ref
@@ -164,7 +166,6 @@ class BLCRExecutor(_BLCRCommonExecutor):
         _BLCRCommonExecutor.__init__(self, args, continuation, expected_output_ids, master_proxy, fetch_limit)
         try:
             self.checkpoint_ref = self.args['checkpoint']
-            self.old_task_id = self.args['old_task_id']
         except KeyError:
             raise BlameUserException('Incorrect arguments to the BLCR executor: %s' % repr(self.args))
         self.master_url = master_proxy.master_url
@@ -180,7 +181,7 @@ class BLCRExecutor(_BLCRCommonExecutor):
         return _BLCRCommonExecutor._execute(self, block_store, task_id)
         
     def process_manage(self, proc):
-        filename = os.path.join('/tmp/', self.old_task_id)
+        filename = os.path.join('/tmp/', self.task_id)
         
         cherrypy.log.error("Opening named pipe: %s" % filename, "BLCR", logging.INFO)
         

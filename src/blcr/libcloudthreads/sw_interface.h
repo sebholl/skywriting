@@ -5,6 +5,8 @@
 
 #include "curl_helper_functions.h"
 
+#define VERBOSE 1
+
 int sw_init( void );
 
 
@@ -21,6 +23,8 @@ int sw_spawntask( const char *new_task_id,
                   const char *jsonenc_dependencies,
                   int is_continuation );
 
+int sw_abort_task( const char *master_url, const char *task_id );
+
 char *sw_post_string_to_worker( const char *worker_url, const char *data );
 char *sw_post_file_to_worker( const char *worker_url, const char *filepath );
 
@@ -32,6 +36,7 @@ char *sw_get_new_output_id( const char *handler, const char *task_id );
 
 inline const char* sw_get_current_worker_url( void );
 
+inline int sw_set_current_task_id( const char *taskid );
 inline const char* sw_get_current_task_id( void );
 
 inline const char* sw_get_current_output_id( void );

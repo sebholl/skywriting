@@ -35,7 +35,9 @@ char *sw_post_string_to_worker( const char *worker_url, const char *data ){
 
     curl_easy_setopt( handle, CURLOPT_POST, 1 );
 
-    //curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
+    #if VERBOSE
+    curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
+    #endif
 
     curl_easy_setopt( handle, CURLOPT_READDATA, &post_data );
     curl_easy_setopt( handle, CURLOPT_READFUNCTION, ReadMemoryCallback );
@@ -45,7 +47,10 @@ char *sw_post_string_to_worker( const char *worker_url, const char *data ){
     id = sw_get_new_task_id( sw_get_current_task_id(), "string" );
 
     asprintf( &post_url, "%s/data/%s/", worker_url, id );
+
+    #if VERBOSE
     printf("Uploading data to \"%s\".\n", post_url );
+    #endif
 
     curl_easy_setopt( handle, CURLOPT_URL, post_url );
     free( post_url );
@@ -71,6 +76,33 @@ char *sw_post_string_to_worker( const char *worker_url, const char *data ){
 
 }
 
+int sw_abort_task( const char *master_url, const char *task_id ){
+
+    char *post_url;
+
+    CURLcode result;
+    CURL *handle;
+
+    handle = curl_easy_init();
+
+    #if VERBOSE
+    printf("Attempting to abort task \"%s\".\n", task_id );
+    curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
+    #endif
+
+    asprintf( &post_url, "%s/%s/abort/", master_url, task_id );
+
+    curl_easy_setopt( handle, CURLOPT_URL, post_url );
+    free( post_url );
+
+    result = curl_easy_perform( handle );
+
+    curl_easy_cleanup( handle );
+
+    return (result==CURLE_OK);
+
+}
+
 char *sw_post_file_to_worker( const char *worker_url, const char *filepath ){
 
     char *post_url;
@@ -93,7 +125,9 @@ char *sw_post_file_to_worker( const char *worker_url, const char *filepath ){
 
     curl_easy_setopt( handle, CURLOPT_POST, 1 );
 
-    //curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
+    #if VERBOSE
+    curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
+    #endif
 
     {
         struct stat buf;
@@ -111,7 +145,10 @@ char *sw_post_file_to_worker( const char *worker_url, const char *filepath ){
     id = sw_get_new_task_id( sw_get_current_task_id(), "file" );
 
     asprintf( &post_url, "%s/data/%s/", worker_url, id );
+
+    #if VERBOSE
     printf("Uploading file \"%s\" to \"%s\".\n", filepath, post_url );
+    #endif
 
     curl_easy_setopt( handle, CURLOPT_URL, post_url );
     free( post_url );
@@ -267,7 +304,10 @@ int sw_spawntask( const char *new_task_id,
     handle = curl_easy_init();
 
     curl_easy_setopt( handle, CURLOPT_POST, 1 );
-    //curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
+
+    #if VERBOSE
+    curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
+    #endif
 
     asprintf( &post_url, "%s/task/%s/spawn", (char *)master_url, (char *)parent_task_id );
     curl_easy_setopt( handle, CURLOPT_URL, post_url );
@@ -319,6 +359,10 @@ inline const char* sw_get_current_worker_url( void ){
 inline const char* sw_get_current_output_id( void ){
     char *value = (char*)getenv( "SW_OUTPUT_ID" );
     return (value != NULL ? value : "4321" );
+}
+
+inline int sw_set_current_task_id( const char *taskid ){
+    return ( setenv( "SW_TASK_ID", taskid, 1 ) == 0 );
 }
 
 inline const char* sw_get_current_task_id( void ){

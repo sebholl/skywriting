@@ -330,7 +330,7 @@ class GlobalDataRoot:
     def default(self, id, attribute=None):
         
         real_id = id
-        
+        print "id: %s, attribute: %s" % (id, attribute)
         if attribute is None:
             if cherrypy.request.method == 'POST':
                 # Add a new URL for the global ID.
