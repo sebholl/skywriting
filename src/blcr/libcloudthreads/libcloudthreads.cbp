@@ -67,6 +67,9 @@
 		<Unit filename="sw_blcr_glue.c">
 			<Option compilerVar="CC" />
 		</Unit>
+		<Unit filename="sw_blcr_results.c">
+			<Option compilerVar="CC" />
+		</Unit>
 		<Unit filename="sw_interface.c">
 			<Option compilerVar="CC" />
 		</Unit>

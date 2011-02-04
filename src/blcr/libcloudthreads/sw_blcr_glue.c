@@ -56,10 +56,22 @@ static void sw_blcr_update_env( void ){
 
 }
 
+void sw_blcr_submit_output( void *output ){
+
+    char *data;
+
+    data = cldthread_serialize_result( output );
+
+    sw_post_string_to_worker( sw_get_current_worker_url(), sw_get_current_output_id(), data );
+
+    free( data );
+
+}
+
 static int sw_blcr_task_checkpoint( const char *resume_task_id,
                                     const char *continuation_task_id,
                                     const char *filepath,
-                                    void(*fptr)(void *),
+                                    void *(*fptr)(void *),
                                     void *const fptr_arg ){
 
     int result;
@@ -72,13 +84,20 @@ static int sw_blcr_task_checkpoint( const char *resume_task_id,
 
     result = blcr_checkpoint( filepath );
 
+    /* result < 0 iff this execution is resumption of
+     * a checkpoint using cr_restart etc.              */
     if( result < 0 ){
 
         sw_blcr_update_env();
 
         if( fptr != NULL ){
-            fptr( fptr_arg );
+
+            cldthread_result_none();
+
+            sw_blcr_submit_output( fptr( fptr_arg ) );
+
             exit( EXIT_SUCCESS );
+
         }
 
     }
@@ -144,7 +163,7 @@ static int sw_blcr_wait_on_outputs( const char *output_ids[], size_t id_count ){
 
         free( chkpt_file_id );
 
-        args_id = sw_post_string_to_worker( sw_get_current_worker_url(), jsonenc_args );
+        args_id = sw_post_string_to_worker( sw_get_current_worker_url(), NULL, jsonenc_args );
 
         free( jsonenc_args );
 
@@ -204,7 +223,7 @@ int sw_blcr_init( void ){
 }
 
 
-cldthread *sw_blcr_spawnthread( void(*fptr)(void *), void *arg0 ){
+cldthread *sw_blcr_spawnthread( void *(*fptr)(void *), void *arg0 ){
 
     char *path;
 
@@ -250,7 +269,7 @@ cldthread *sw_blcr_spawnthread( void(*fptr)(void *), void *arg0 ){
 
         free( chkpt_file_id );
 
-        args_id = sw_post_string_to_worker( sw_get_current_worker_url(), jsonenc_args );
+        args_id = sw_post_string_to_worker( sw_get_current_worker_url(), NULL, jsonenc_args );
 
         free( jsonenc_args );
 
@@ -270,6 +289,7 @@ cldthread *sw_blcr_spawnthread( void(*fptr)(void *), void *arg0 ){
             result = sw_create_thread_object();
             result->task_id = thread_task_id;
             result->output_id = thread_output_id;
+            result->result = NULL;
 
         };
 
@@ -300,7 +320,7 @@ inline int sw_blcr_wait_thread( cldthread *thread ){
 
 }
 
-int sw_blcr_wait_threads( cldthread *thread[], size_t thread_count ){
+int sw_blcr_wait_threads( cldthread *thread[], size_t const thread_count ){
 
     size_t i;
 
@@ -315,6 +335,8 @@ int sw_blcr_wait_threads( cldthread *thread[], size_t thread_count ){
     result = sw_blcr_wait_on_outputs( output_ids, thread_count );
 
     free(output_ids);
+
+    for( i = 0; i < thread_count; i++ ) thread[i]->result = cldthread_retrieve_result( thread[i]->output_id );
 
     return result;
 

@@ -119,7 +119,7 @@ class _BLCRCommonExecutor(SWExecutor):
             if rc == 0:
                 cherrypy.engine.publish("worker_event", "Executor: PackagedApp exited successfully")
                 # XXX: fix size_hint and related.
-                block_store.store_object(True, 'json', self.output_ids[0])
+                # block_store.store_object(True, 'json', self.output_ids[0])
                 
                 real_ref = SW2_ConcreteReference(self.output_ids[0], 0)
                 real_ref.add_location_hint(block_store.netloc)
@@ -203,5 +203,5 @@ class BLCRExecutor(_BLCRCommonExecutor):
 
     def get_process_args(self):
         cherrypy.log.error("BLCRExecutor checkpoint path : %s" % self.checkpoint_filenames, "BLCR", logging.INFO)
-        return ["cr_restart", self.checkpoint_filenames[0] ]
+        return ["cr_restart", "--no-restore-pid", self.checkpoint_filenames[0] ]
 

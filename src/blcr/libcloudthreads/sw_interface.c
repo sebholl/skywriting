@@ -15,12 +15,18 @@
 
 int spawn_count = 0;
 
-char *sw_post_string_to_worker( const char *worker_url, const char *data ){
+char *sw_post_string_to_worker( const char *worker_url, const char *id, const char *str ){
+
+    return sw_post_data_to_worker( worker_url, id, str, strlen(str) );
+
+}
+
+char *sw_post_data_to_worker( const char *worker_url, const char *_id, const void *data, size_t size ){
 
     struct MemoryStruct post_data;
 
-    char *post_url;
     char *id;
+    char *post_url;
 
     CURLcode result;
     CURL *handle;
@@ -28,7 +34,7 @@ char *sw_post_string_to_worker( const char *worker_url, const char *data ){
     struct curl_slist *chunk;
 
     post_data.memory = (char *)data;
-    post_data.size = strlen( data );
+    post_data.size = size;
     post_data.offset = 0;
 
     handle = curl_easy_init();
@@ -44,7 +50,8 @@ char *sw_post_string_to_worker( const char *worker_url, const char *data ){
 
     curl_easy_setopt( handle, CURLOPT_POSTFIELDSIZE, post_data.size );
 
-    id = sw_get_new_task_id( sw_get_current_task_id(), "string" );
+    id = (_id == NULL) ? sw_get_new_task_id( sw_get_current_task_id(), "string" )
+                       : (char *)_id;
 
     asprintf( &post_url, "%s/data/%s/", worker_url, id );
 
@@ -67,12 +74,58 @@ char *sw_post_string_to_worker( const char *worker_url, const char *data ){
     if(result!=CURLE_OK){
 
         printf( "sw_post_data_to_worker(): error during upload: %s\n", curl_easy_strerror(result) );
-        if(id!=NULL) free( id );
+        if(id!=_id) free( id );
         return NULL;
 
     }
 
     return id;
+
+}
+
+char *sw_get_data_from_store( const char *worker_url, const char *id, size_t *size_out ){
+
+    char *url;
+
+    CURLcode result;
+    CURL *handle;
+
+    struct MemoryStruct data = { NULL, 0, 0 };
+
+    handle = curl_easy_init();
+
+    #if VERBOSE
+    curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
+    #endif
+
+    asprintf( &url, "%s/data/%s/", worker_url, id );
+
+    #if VERBOSE
+    printf("Retrieving data from \"%s\".\n", url );
+    #endif
+
+    curl_easy_setopt( handle, CURLOPT_URL, url );
+    free( url );
+
+
+    curl_easy_setopt( handle, CURLOPT_WRITEFUNCTION, &WriteMemoryCallback );
+    curl_easy_setopt( handle, CURLOPT_WRITEDATA, &data );
+
+    result = curl_easy_perform( handle );
+
+    curl_easy_cleanup( handle );
+
+    if(result!=CURLE_OK){
+
+        printf( "sw_get_data_from_store(): error during download: %s\n", curl_easy_strerror(result) );
+        if(data.size != 0) free(data.memory);
+        return NULL;
+
+    }
+
+    if( size_out != NULL ) *size_out = data.size;
+
+    return data.memory;
 
 }
 
@@ -154,12 +207,6 @@ char *sw_post_file_to_worker( const char *worker_url, const char *filepath ){
     free( post_url );
 
     curl_easy_setopt( handle, CURLOPT_READDATA, fd );
-
-    /*
-    curl_easy_setopt( handle, CURLOPT_WRITEFUNCTION, &WriteMemoryCallback );
-    curl_easy_setopt( handle, CURLOPT_WRITEDATA, &url );
-    curl_easy_setopt( handle, CURLOPT_WRITEDATA,  fopen("test.txt","w") );
-    */
 
     chunk = NULL;
     chunk = curl_slist_append( chunk, "Content-Type: identity" );
@@ -257,7 +304,7 @@ char *sw_create_json_task_descriptor( const char *new_task_id,
                                       const char *current_task_id,
                                       const char *handler,
                                       const char *jsonenc_dependencies,
-                                      int is_continuation ){
+                                      int const is_continuation ){
 
     char *jsondesc;
 
@@ -288,7 +335,7 @@ int sw_spawntask( const char *new_task_id,
                   const char *parent_task_id,
                   const char *handler,
                   const char *jsonenc_dependencies,
-                  int is_continuation ){
+                  int const is_continuation ){
 
     struct MemoryStruct postdata;
 
