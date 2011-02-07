@@ -61,14 +61,19 @@
 		<Unit filename="blcr_interface.c">
 			<Option compilerVar="CC" />
 		</Unit>
+		<Unit filename="cldthread.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="cldthread_obj.c">
+			<Option compilerVar="CC" />
+		</Unit>
 		<Unit filename="curl_helper_functions.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="sw_blcr_glue.c">
 			<Option compilerVar="CC" />
-		</Unit>
-		<Unit filename="sw_blcr_results.c">
-			<Option compilerVar="CC" />
+			<Option compile="0" />
+			<Option link="0" />
 		</Unit>
 		<Unit filename="sw_interface.c">
 			<Option compilerVar="CC" />

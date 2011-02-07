@@ -1,10 +1,5 @@
-#define _GNU_SOURCE
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/stat.h>
-#include <string.h>
+/* included in cldthread.c */
 
-#include "sw_blcr_glue.h"
 #include "blcr_interface.h"
 #include "sw_interface.h"
 
@@ -56,18 +51,6 @@ static void sw_blcr_update_env( void ){
 
 }
 
-void sw_blcr_submit_output( void *output ){
-
-    char *data;
-
-    data = cldthread_serialize_result( output );
-
-    sw_post_string_to_worker( sw_get_current_worker_url(), sw_get_current_output_id(), data );
-
-    free( data );
-
-}
-
 static int sw_blcr_task_checkpoint( const char *resume_task_id,
                                     const char *continuation_task_id,
                                     const char *filepath,
@@ -92,9 +75,9 @@ static int sw_blcr_task_checkpoint( const char *resume_task_id,
 
         if( fptr != NULL ){
 
-            cldthread_result_none();
+            cldthread_exit( cldthread_none() );
 
-            sw_blcr_submit_output( fptr( fptr_arg ) );
+            cldthread_submit_output( fptr( fptr_arg ) );
 
             exit( EXIT_SUCCESS );
 
@@ -213,132 +196,3 @@ static int sw_blcr_wait_on_outputs( const char *output_ids[], size_t id_count ){
     return result;
 
 }
-
-/* API */
-
-int sw_blcr_init( void ){
-
-    return blcr_init_framework() && sw_init();
-
-}
-
-
-cldthread *sw_blcr_spawnthread( void *(*fptr)(void *), void *arg0 ){
-
-    char *path;
-
-    char *thread_task_id;
-    char *thread_output_id;
-
-    cldthread *result;
-
-    asprintf( &path, "%s.checkpoint.thread", sw_get_current_output_id() );
-
-    result = NULL;
-
-    /* Create values for the new task */
-    thread_task_id = sw_get_new_task_id( sw_get_current_task_id(), "thread" );
-    thread_output_id = sw_get_new_output_id( "blcr", thread_task_id );
-
-    if( sw_blcr_task_checkpoint( thread_task_id, NULL, path, fptr, arg0 ) ){
-
-        int args_size;
-        int chkpt_size;
-
-        char *chkpt_file_id;
-        char *args_id;
-        char *jsonenc_dpnds;
-        char *jsonenc_args;
-
-        chkpt_file_id = sw_post_file_to_worker( sw_get_current_worker_url(), path );
-
-        {
-            struct stat buf;
-
-            if( stat(path, &buf)==-1 ){
-                perror("sw_blcr_spawnthread: cannot retrieve checkpoint filesize");
-                return result;
-            }
-
-            chkpt_size = buf.st_size;
-
-        }
-
-        args_size = asprintf( &jsonenc_args, "{\"checkpoint\": {\"__ref__\": [\"c2\", \"%s\", %d, [\"%s\"]]} }",
-                                             chkpt_file_id, chkpt_size, sw_get_current_worker_url() );
-
-        free( chkpt_file_id );
-
-        args_id = sw_post_string_to_worker( sw_get_current_worker_url(), NULL, jsonenc_args );
-
-        free( jsonenc_args );
-
-        asprintf( &jsonenc_dpnds, "{\"_args\": {\"__ref__\": [\"c2\", \"%s\", %d, [\"%s\"]]} }",
-                                  args_id, args_size, sw_get_current_worker_url() );
-
-        free( args_id );
-
-        if( sw_spawntask( thread_task_id,
-                          thread_output_id,
-                          sw_get_master_url(),
-                          sw_get_current_task_id(),
-                          "blcr",
-                          jsonenc_dpnds,
-                          0 )                          ) {
-
-            result = sw_create_thread_object();
-            result->task_id = thread_task_id;
-            result->output_id = thread_output_id;
-            result->result = NULL;
-
-        };
-
-        free( jsonenc_dpnds );
-
-
-    } else {
-
-        free( thread_task_id );
-        free( thread_output_id );
-
-        /* There has been an error... */
-
-        perror( "Couldn't checkpoint process so we should perhaps resort to local threading.\n" );
-
-    }
-
-    free( path );
-
-    return result;
-
-}
-
-
-inline int sw_blcr_wait_thread( cldthread *thread ){
-
-    return sw_blcr_wait_threads( &thread, 1 );
-
-}
-
-int sw_blcr_wait_threads( cldthread *thread[], size_t const thread_count ){
-
-    size_t i;
-
-    int result;
-
-    const char **output_ids;
-
-    output_ids = calloc( thread_count, sizeof( const char * ) );
-
-    for( i = 0; i < thread_count; i++ ) output_ids[i] = thread[i]->output_id;
-
-    result = sw_blcr_wait_on_outputs( output_ids, thread_count );
-
-    free(output_ids);
-
-    for( i = 0; i < thread_count; i++ ) thread[i]->result = cldthread_retrieve_result( thread[i]->output_id );
-
-    return result;
-
-}
-

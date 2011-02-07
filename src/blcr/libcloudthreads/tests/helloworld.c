@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "../sw_blcr_glue.h"
+#include "../cldthread.h"
 
 void *my_thread();
 
@@ -18,19 +18,19 @@ int main(int argc, char *argv[])
 
     cldthread *threads[4];
 
-    sw_blcr_init();
+    cldthread_init();
 
     for( i = 0; i < 4; i++ ){
         printf("Creating thread %d.\n", i );
-        threads[i] = sw_blcr_spawnthread( my_thread, (void *)i );
+        threads[i] = cldthread_create( my_thread, (void *)i );
         /*
         printf("Waiting for thread %d.\n", i );
-        sw_blcr_wait_thread( threads[i] );
+        cldthread_join( threads[i] );
         */
     }
 
     printf("Waiting for all threads.\n");
-    sw_blcr_wait_threads( threads, 4 );
+    cldthread_joins( threads, 4 );
 
     for( i = 0; i < 4; i++ ){
         asprintf( &ret_value, "%sThread %d Output: \"%s\"\n", tmp, i, threads[i]->result->value.string );
@@ -40,7 +40,8 @@ int main(int argc, char *argv[])
 
     printf( "Finished!\n" );
 
-    sw_blcr_submit_output( cldthread_result_string( ret_value ) );
+    cldthread_exit( cldthread_string( ret_value ) );
+    cldthread_submit_output( NULL );
 
     return 0;
 }
@@ -59,5 +60,5 @@ void *my_thread(int thread_id)
 
     asprintf( &ret_value, "I've finished! (Thread ID: %d)", thread_id );
 
-    return cldthread_result_string( ret_value );
+    return cldthread_exit( cldthread_string( ret_value ) );
 }
