@@ -17,7 +17,7 @@ int sw_spawntask( const char *new_task_id,
                   const char *master_url,
                   const char *parent_task_id,
                   const char *handler,
-                  const char *jsonenc_dependencies,
+                  cJSON *jsonenc_dependencies,
                   int const is_continuation );
 
 int sw_abort_task( const char *master_url, const char *task_id );
@@ -47,13 +47,14 @@ inline const char* sw_get_block_store_path( void );
  *   src/python/skywriting/runtime/task_executor.py
  *   spawn_func( self, spawn_expre, args )
  */
-char *sw_create_json_task_descriptor( const char *new_task_id,
-                                      const char *output_task_id,
-                                      const char *current_task_id,
-                                      const char *handler,
-                                      const char *jsonenc_dependencies,
-                                      int const is_continuation );
+cJSON *sw_create_json_task_descriptor( const char *new_task_id,
+                                       const char *output_task_id,
+                                       const char *current_task_id,
+                                       const char *handler,
+                                       cJSON *jsonenc_dependencies,
+                                       int const is_continuation );
 
 char *sw_sha1_hex_digest_from_bytes( const char *bytes, unsigned int len, int shouldFreeInput );
 
 char *sw_get_data_from_store( const swref *ref, size_t *size_out );
+cJSON *sw_get_json_from_store( const swref *ref );

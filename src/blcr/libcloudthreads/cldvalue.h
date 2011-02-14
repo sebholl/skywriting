@@ -1,3 +1,4 @@
+#include "cJSON.h"
 #include <inttypes.h>
 
 typedef struct cldvalue {
@@ -23,8 +24,8 @@ cldvalue *cldvalue_real( long double dbl );
 cldvalue *cldvalue_string( const char *str );
 cldvalue *cldvalue_data( void *data, size_t size );
 
-char *cldvalue_serialize( cldvalue *obj, void *default_value );
-cldvalue *cldvalue_deserialize( const char *output_id );
+cJSON *cldvalue_serialize( cldvalue *obj, void *default_value );
+cldvalue *cldvalue_deserialize( cJSON *json );
 
 inline intmax_t cldvalue_to_intmax( const cldvalue *obj );
 inline long cldvalue_to_long( const cldvalue *obj );

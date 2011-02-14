@@ -82,148 +82,92 @@ inline void * cldvalue_to_data( const cldvalue *obj, size_t *size ){
     return obj->value.data;
 }
 
-char *cldvalue_serialize( cldvalue *obj, void *default_value ){
+cJSON *cldvalue_serialize( cldvalue *obj, void *default_value ){
 
-    char *result;
+    cJSON *result = cJSON_CreateObject();
+
+    cJSON_AddNumberToObject ( result, "type", obj->type );
+    cJSON_AddNumberToObject ( result, "size", obj->size );
 
     swref *ref = NULL;
-    char *value = NULL;
 
     switch(obj->type){
-        case BINARY:
-            ref = sw_save_data_to_worker( NULL, NULL, obj->value.data, obj->size );
-            value = sw_serialize_ref( ref );
-            break;
-        case STRING:
-            ref = sw_save_string_to_worker( NULL, NULL, obj->value.string );
-            value = sw_serialize_ref( ref );
-            break;
         case INTEGER:
-            asprintf( &value, "\"%" PRIdMAX "\"", obj->value.integer );
+            cJSON_AddNumberToObject( result, "value", obj->value.integer );
             break;
         case REAL:
-            asprintf( &value, "\"%Lf\"", (long double)obj->value.real );
+            cJSON_AddNumberToObject( result, "value", obj->value.real );
+            break;
+        case STRING:
+            cJSON_AddStringToObject( result, "value", obj->value.string );
+            break;
+        case BINARY:
+            ref = sw_save_data_to_worker( NULL, NULL, obj->value.data, obj->size );
+            cJSON_AddItemToObject( result, "ref", sw_serialize_ref( ref ) );
             break;
         default:
             if( default_value != NULL ){
-                asprintf( &value, "\"%p\"", default_value );
+                cJSON_AddNumberToObject( result, "value", (int)default_value );
             } else {
-                value = "\"NULL\"";
+                cJSON_AddNullToObject( result, "value" );
             }
             break;
     }
-
-    asprintf( &result, "{ \"type\": %d, \"size\": %" PRIuMAX ", \"%s\": %s }",
-              (int)obj->type, (uintmax_t)obj->size, (ref != NULL ? "ref" : "value"), value );
-
-    if(value!=NULL) free(value);
-    if(ref!=NULL) sw_free_ref(ref);
 
     return result;
 
 }
 
-cldvalue *cldvalue_deserialize( const char *data ){
+cldvalue *cldvalue_deserialize( cJSON *json ){
 
-    cldvalue *result;
+    cldvalue *result = NULL;
 
-    if( data != NULL ){
+    if( json != NULL ){
 
-        int completeness_mask;
-        char *str, *str_again, *token, *saveptr;
-        char *tmp_value;
-        int tmp_i;
-        intmax_t tmp_int;
-        uintmax_t tmp_uint;
+        swref * ref;
 
-        size_t char_count = 0;
+        result = calloc( 1, sizeof(cldvalue) );
 
-        str = str_again = strdup( data );
-        completeness_mask = 0;
-        result = malloc( sizeof(cldvalue) );
+        result->type = (enum cldthread_result_type)cJSON_GetObjectItem(json,"type")->valueint;
 
-        while(1){
+        result->size = (size_t)cJSON_GetObjectItem(json,"size")->valueint;
 
-            if( ( token = strtok_r(str, ",", &saveptr) ) == NULL ) break;
+        switch( result->type ) {
 
-            str = NULL;
+            case INTEGER:
+                result->value.integer = cJSON_GetObjectItem(json,"value")->valueint;
+                break;
 
-            if( sscanf( token, "%*[^\"]\"type\" : %" SCNdMAX, &(tmp_int) ) == 1 ){
+            case REAL:
+                result->value.integer = cJSON_GetObjectItem(json,"value")->valuedouble;
+                break;
 
-                result->type = (enum cldthread_result_type)tmp_int;
-                completeness_mask |= 1;
+            case STRING:
+                result->value.string = strdup(cJSON_GetObjectItem(json,"value")->valuestring);
 
-            } else if( sscanf( token, "%*[^\"]\"size\" : %" SCNuMAX, &(tmp_uint) ) == 1 ){
+            case DATA:
 
-                result->size = (size_t)tmp_uint;
-                completeness_mask |= 2;
-
-            } else if( sscanf( token, "%*[^\"]\"value\" : \"%as", &(tmp_value) ) == 1 ) {
-
-                switch( result->type ) {
-
-                    case INTEGER:
-
-                        if( sscanf( tmp_value, "%"SCNdMAX, &(result->value.integer) ) == 1 )
-                            completeness_mask |= 4;
-                        break;
-
-                    case REAL:
-
-                        if( sscanf( tmp_value, "%Lf", &(result->value.real) ) == 1 )
-                            completeness_mask |= 4;
-                        break;
-
-                    default:
-
-                        if( sscanf( tmp_value, "%p", &(result->value.data) ) == 1)
-                            completeness_mask |= 4;
-                        break;
-                }
-
-                free( tmp_value );
-
-            } else if( sscanf( token, "%*[^\"]\"ref\" : %n%as", &tmp_i, &tmp_value ) > 0 ) {
-
-                swref *ref;
-
-                free(tmp_value);
-                sscanf( &data[char_count+tmp_i], "%a[^}]", &tmp_value );
-
-                ref = sw_deserialize_ref( tmp_value );
-                free( tmp_value );
+                ref = sw_deserialize_ref( cJSON_GetObjectItem(json,"ref") );
 
                 if( ref != NULL ){
 
                     result->value.data = sw_get_data_from_store( ref, &(result->size) );
-
                     sw_free_ref( ref );
-
-                    completeness_mask |= 4;
 
                 }
 
-            }
+                break;
 
-            char_count += strlen( token )+1;
+            default:
+
+                result->value.data = (void *)cJSON_GetObjectItem(json,"value")->valueint;
+                break;
 
         }
-
-        free(str_again);
-
-        if(completeness_mask != (1|2|4)){
-            #if VERBOSE
-            printf( "!Error while parsing CloudThread result \"%s\" (%d).\n", data, completeness_mask );
-            #endif
-            free( result );
-            result = NULL;
-        }
-
-        return result;
 
     }
 
-    return NULL;
+    return result;
 
 }
 

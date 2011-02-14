@@ -118,64 +118,40 @@ static int sw_blcr_wait_on_outputs( const swref *output_refs[], size_t id_count 
 
     if( result > 0 ){
 
-        int args_size;
-        int chkpt_size;
+        size_t i;
 
-        char *jsonenc_args;
-        char *jsonenc_thread_dpnds;
-        char *jsonenc_dpnds;
+        cJSON *jsonenc_args;
+        cJSON *jsonenc_dpnds;
 
         swref *chkpt_ref;
         swref *args_ref;
 
         char *tmp;
 
-        {
-            struct stat buf;
-
-            if( stat(path, &buf)==-1 ){
-                perror( "sw_blcr_flushthreads: cannot retrieve checkpoint filesize" );
-                return result;
-            }
-
-            chkpt_size = buf.st_size;
-
-        }
+        jsonenc_args = cJSON_CreateObject();
 
         chkpt_ref = sw_move_file_to_worker( NULL, path, NULL );
-        tmp = sw_serialize_ref( chkpt_ref );
+        cJSON_AddItemToObject( jsonenc_args, "checkpoint", sw_serialize_ref( chkpt_ref ) );
         sw_free_ref( chkpt_ref );
 
-        args_size = asprintf( &jsonenc_args,  "{\"checkpoint\": %s }", tmp );
+        tmp = cJSON_PrintUnformatted( jsonenc_args );
+        cJSON_Delete( jsonenc_args );
 
-        free(tmp);
+        args_ref = sw_save_string_to_worker( NULL, NULL, tmp );
+        free( tmp );
 
-        args_ref = sw_save_string_to_worker( NULL, NULL, jsonenc_args );
-        free( jsonenc_args );
 
-        jsonenc_thread_dpnds = strdup("");
+        jsonenc_dpnds = cJSON_CreateObject();
 
-        /* C heap string concatanation for-loop */
-        {
-            size_t i;
-            char *tmp, *serialized_ref;
-            for(i = 0; i < id_count; i++ ){
-                serialized_ref = sw_serialize_ref( output_refs[i] );
-                asprintf( &jsonenc_thread_dpnds, "%s\"thread%d_output\": %s, ",
-                          (tmp = jsonenc_thread_dpnds), i, serialized_ref );
-                free( serialized_ref );
-                free( tmp );
-            }
-        }
-
-        tmp = sw_serialize_ref( args_ref );
+        cJSON_AddItemToObject( jsonenc_dpnds, "_args", sw_serialize_ref( args_ref ) );
         sw_free_ref( args_ref );
 
-        asprintf( &jsonenc_dpnds, "{%s\"_args\": %s }",
-                                  jsonenc_thread_dpnds, tmp );
+        for(i = 0; i < id_count; i++ ){
+            asprintf( &tmp, "thread%d_output", i );
+            cJSON_AddItemToObject( jsonenc_dpnds, tmp, sw_serialize_ref( output_refs[i] ) );
+            free(tmp);
+        }
 
-        free( jsonenc_thread_dpnds );
-        free( tmp );
 
         /* Attempt to POST a new task to CIEL */
         result = sw_spawntask( cont_task_id,
@@ -186,23 +162,17 @@ static int sw_blcr_wait_on_outputs( const swref *output_refs[], size_t id_count 
                                jsonenc_dpnds,
                                1 );
 
+        cJSON_Delete( jsonenc_dpnds );
+
         /* If we managed to spawn a new continuation task, then terminate this process */
         if( result ) exit( 20 );
 
         /* Otherwise, clean-up and return (we can't really do anything else) */
-        free( jsonenc_dpnds );
+        free( tmp );
 
     } else if (result < 0) {
 
-        /* Resuming continuation, we need to update ConcreteReferences */
-        /* TODO: Do we?
-        size_t i;
-        swref *deserialized_ref;
-        for(i = 0; i < id_count; i++ ){
-            deserialized_ref = sw_deserialize_ref( getenv( output_refs[i]->ref_id ) );
-            if( deserialized_ref != NULL ) sw_fatal_merge_ref( (swref *)output_refs[i], deserialized_ref );
-        }
-        */
+
 
     } else {
 

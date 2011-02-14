@@ -38,30 +38,43 @@ cldthread *cldthread_create( void *(*fptr)(void *), void *arg0 ){
 
     if( sw_blcr_task_checkpoint( thread_task_id, NULL, path, fptr, arg0 ) ){
 
-        char *jsonenc_dpnds;
-        char *jsonenc_args;
+        cJSON *jsonenc_dpnds;
+        cJSON *jsonenc_args;
         char *tmp;
 
         swref *chkpt_ref;
         swref *args_ref;
 
+        printf("Hey...\n");
+
+        /* Post arguments as data in the block store */
+
+        jsonenc_args = cJSON_CreateObject();
+
+        printf("Over here...\n");
+
         chkpt_ref = sw_move_file_to_worker( NULL, path, NULL );
 
-        tmp = sw_serialize_ref( chkpt_ref );
+        printf("What you looking at? %p %s\n", chkpt_ref, path);
+
+        cJSON_AddItemToObject( jsonenc_args, "checkpoint", sw_serialize_ref( chkpt_ref ) );
         sw_free_ref( chkpt_ref );
 
-        asprintf( &jsonenc_args, "{\"checkpoint\": %s }", tmp );
+        printf("Up to here...\n");
 
+        tmp = cJSON_PrintUnformatted( jsonenc_args );
+        cJSON_Delete( jsonenc_args );
+
+        printf("And then a little bit further\n");
+
+        args_ref = sw_save_string_to_worker( NULL, NULL, tmp );
         free( tmp );
 
-        args_ref = sw_save_string_to_worker( NULL, NULL, jsonenc_args );
+        /* Then create the task */
 
-        tmp = sw_serialize_ref( args_ref );
+        jsonenc_dpnds = cJSON_CreateObject();
+        cJSON_AddItemToObject( jsonenc_dpnds, "_args", sw_serialize_ref( args_ref ) );
         sw_free_ref( args_ref );
-        free( jsonenc_args );
-
-        asprintf( &jsonenc_dpnds, "{\"_args\": %s }", tmp );
-        free( tmp );
 
         if( sw_spawntask( thread_task_id,
                           thread_output_id,
@@ -78,7 +91,7 @@ cldthread *cldthread_create( void *(*fptr)(void *), void *arg0 ){
 
         };
 
-        free( jsonenc_dpnds );
+        cJSON_Delete( jsonenc_dpnds );
 
 
     } else {
@@ -115,6 +128,8 @@ int cldthread_joins( cldthread *thread[], size_t const thread_count ){
 
     const swref **output_refs;
 
+    cJSON *json;
+
     output_refs = calloc( thread_count, sizeof( swref * ) );
 
     for( i = 0; i < thread_count; i++ ) output_refs[i] = thread[i]->output_ref;
@@ -122,7 +137,9 @@ int cldthread_joins( cldthread *thread[], size_t const thread_count ){
     result = sw_blcr_wait_on_outputs( output_refs, thread_count );
 
     for( i = 0; i < thread_count; i++ ){
-        thread[i]->result = cldvalue_deserialize( sw_get_data_from_store( output_refs[i], NULL ) );
+        json = sw_get_json_from_store( output_refs[i] );
+        thread[i]->result = cldvalue_deserialize( json );
+        cJSON_Delete( json );
     }
 
     free(output_refs);
@@ -141,13 +158,16 @@ inline int cldthread_join( cldthread *thread ){
 
 void cldthread_submit_output( void *output ){
 
-    char *data;
+    cJSON *json;
+    char *tmp;
 
-    data = cldvalue_serialize( _result, output );
+    json = cldvalue_serialize( _result, output );
+    tmp = cJSON_PrintUnformatted( json );
+    cJSON_Delete( json );
 
-    sw_save_string_to_worker( NULL, sw_get_current_output_id(), data );
+    sw_save_string_to_worker( NULL, sw_get_current_output_id(), tmp );
 
-    free( data );
+    free( tmp );
 
 }
 

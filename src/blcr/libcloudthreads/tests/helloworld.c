@@ -23,6 +23,7 @@ int main(int argc, char *argv[])
     for( i = 0; i < 4; i++ ){
         printf("Creating thread %d.\n", i );
         threads[i] = cldthread_create( my_thread, (void *)i );
+        printf("Created thread %p.\n", threads[i] );
         /*
         printf("Waiting for thread %d.\n", i );
         cldthread_join( threads[i] );
@@ -33,6 +34,7 @@ int main(int argc, char *argv[])
     cldthread_joins( threads, 4 );
 
     for( i = 0; i < 4; i++ ){
+        printf( "threads[i]->result: %p\n", threads[i]->result);
         asprintf( &ret_value, "%sThread %d Output: \"%s\"\n", tmp, i, cldvalue_to_string(threads[i]->result) );
         free(tmp);
         tmp = ret_value;

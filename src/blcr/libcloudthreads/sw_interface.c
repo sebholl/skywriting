@@ -13,7 +13,7 @@
 #include "sw_interface.h"
 #include "curl_helper_functions.h"
 
-int spawn_count = 0;
+static int spawn_count = 0;
 
 swref *sw_save_string_to_worker( const char *worker_url, const char *id, const char *str ){
 
@@ -207,6 +207,7 @@ swref *sw_create_ref( enum swref_type type, const char *ref_id, uintmax_t size, 
     result->ref_id = strdup(ref_id);
     result->size = size;
     result->loc_hints[0] = strdup(loc_hint);
+    result->loc_hints_size = 1;
 
     return result;
 
@@ -241,79 +242,38 @@ void sw_free_ref( swref *ref ){
 
 }
 
-char *sw_serialize_ref( const swref * const ref ){
+cJSON *sw_serialize_ref( const swref * const ref ){
 
-    char *result = NULL;
+    cJSON *result = NULL;
 
     if( ref != NULL ){
 
-        char *tmp;
-        char *loc_hints = strdup("");
+        cJSON *array;
 
-        /* C heap string concatanation for-loop */
-        {
-            size_t i = 0;
-            char *tmp;
-            const char *hint;
-            for(hint = ref->loc_hints[i]; hint != NULL; hint = ref->loc_hints[++i] ){
-                asprintf( &loc_hints, "%s\"%s\"%s",
-                          (tmp = loc_hints), ref->loc_hints[i], ref->loc_hints[i+1] != NULL ? ", " : "" );
-                free( tmp );
-            }
-        }
+        result = cJSON_CreateObject();
+
+        array = cJSON_CreateArray();
 
         switch( ref->type ){
             case FUTURE:
-                asprintf( &tmp, "[ \"%s\", \"%s\" ]", swref_map_type_tuple_id[ref->type], ref->ref_id );
+                cJSON_AddItemToArray( array, cJSON_CreateString(swref_map_type_tuple_id[ref->type]) );
+                cJSON_AddItemToArray( array, cJSON_CreateString(ref->ref_id) );
                 break;
             case STREAMING:
-                asprintf( &tmp, "[ \"%s\", \"%s\", [ %s ] ]", swref_map_type_tuple_id[ref->type], ref->ref_id, loc_hints );
+                cJSON_AddItemToArray( array, cJSON_CreateString(swref_map_type_tuple_id[ref->type]) );
+                cJSON_AddItemToArray( array, cJSON_CreateString(ref->ref_id) );
+                cJSON_AddItemToArray( array, cJSON_CreateStringArray( ref->loc_hints, ref->loc_hints_size ) );
                 break;
             case CONCRETE:
             default:
-                asprintf( &tmp, "[ \"%s\", \"%s\", %" PRIuMAX ", [ %s ] ]", swref_map_type_tuple_id[ref->type], ref->ref_id, ref->size, loc_hints );
+                cJSON_AddItemToArray( array, cJSON_CreateString(swref_map_type_tuple_id[ref->type]) );
+                cJSON_AddItemToArray( array, cJSON_CreateString(ref->ref_id) );
+                cJSON_AddItemToArray( array, cJSON_CreateNumber(ref->size) );
+                cJSON_AddItemToArray( array, cJSON_CreateStringArray( ref->loc_hints, ref->loc_hints_size ) );
                 break;
         }
 
-        free( loc_hints );
-        asprintf( &result, "{ \"__ref__\": %s }", tmp );
-        free(tmp);
-
-    }
-
-
-
-    return result;
-
-}
-
-static const char **sw_json_string_tuple_decode( const char *data ){
-
-    size_t i = 0;
-    int curr_offset = -1;
-    int global_offset = 0;
-
-    char *str;
-    size_t arr_size = 2;
-
-    const char **result = calloc( arr_size, sizeof(const char *) );
-
-    while ( sscanf( &data[global_offset], " \"%a[^\"]\" %*[,] %n", &str, &curr_offset) > 0 ){
-
-        if( arr_size <= i ){
-            arr_size <<= 1;
-            result = realloc( result, sizeof(const char *) * (arr_size+1) );
-        }
-
-        result[i++] = str;
-
-        /* Make sure NULL is set for the next element (null-terminated array). */
-        result[i] = NULL;
-
-        if(curr_offset == -1) break;
-
-        global_offset += curr_offset;
-        curr_offset = -1;
+        cJSON_AddItemToObject( result, "__ref__", array );
 
     }
 
@@ -321,61 +281,64 @@ static const char **sw_json_string_tuple_decode( const char *data ){
 
 }
 
-swref *sw_deserialize_ref( const char *data ){
+swref *sw_deserialize_ref( cJSON *json ){
 
+    cJSON *ref;
     swref *result = NULL;
 
-    if( data != NULL ){
+    if( (json != NULL) && ( (ref = cJSON_GetObjectItem(json, "__ref__")) != NULL ) ){
 
-        int offset = -1;
+        int i;
+
+        cJSON *netlocs;
+
         char *parse_type;
 
-        if( (sscanf( data, " { \"__ref__\" :  [ \"%a[^\"]\" , %n", &parse_type, &offset ) > 0) && (offset >= 0) ){
+        result = calloc( 1, sizeof( swref ) );
 
-            size_t i;
+        parse_type = cJSON_GetArrayItem( ref, 0 )->valuestring;
 
-            result = calloc( 1, sizeof(swref) );
+        for(i = SWREFTYPE_ENUMMIN; i <= SWREFTYPE_ENUMMAX; i++){
+            if( strcmp( parse_type, swref_map_type_tuple_id[i] ) == 0 ){
+                result->type = i;
+                break;
+            }
+        }
 
-            result->type = OTHER;
+        switch(result->type){
 
-            for(i = SWREFTYPE_ENUMMIN; i <= SWREFTYPE_ENUMMAX; i++){
-                if( strcmp( parse_type, swref_map_type_tuple_id[i] ) == 0 ){
-                    result->type = i;
-                    break;
+            case FUTURE:
+                result->ref_id = strdup(cJSON_GetArrayItem( ref, 1 )->valuestring);
+                break;
+
+            case STREAMING:
+                result->ref_id = strdup(cJSON_GetArrayItem( ref, 1 )->valuestring);
+
+                netlocs = cJSON_GetArrayItem( ref, 2 );
+                result->loc_hints_size = cJSON_GetArraySize( netlocs );
+                result->loc_hints = calloc( result->loc_hints_size, sizeof( const char * ) );
+
+                for(i = 0; i < result->loc_hints_size; i++){
+                    result->loc_hints[i] = strdup(cJSON_GetArrayItem( ref, i )->valuestring);
                 }
-            }
 
-            int hints_offset;
+                break;
 
-            switch( result->type ) {
-                case CONCRETE:
-                    sscanf( &data[offset],   " \"%a[^\"]\" "          ", %"SCNuMAX        " , [ %n",
-                                            &result->ref_id,        &result->size,    &hints_offset );
+            case CONCRETE:
+            default:
 
-                    result->loc_hints = sw_json_string_tuple_decode( &data[offset+hints_offset] );
-                    break;
+                result->ref_id = strdup(cJSON_GetArrayItem( ref, 1 )->valuestring);
+                result->size = cJSON_GetArrayItem( ref, 2 )->valueint;
 
-                case STREAMING:
-                    sscanf( &data[offset],     " \"%a[^\"]\" "         ", [ %n",
-                                               &result->ref_id,    &hints_offset );
+                netlocs = cJSON_GetArrayItem( ref, 3 );
+                result->loc_hints_size = cJSON_GetArraySize( netlocs );
+                result->loc_hints = calloc( result->loc_hints_size, sizeof( const char * ) );
 
-                    result->loc_hints = sw_json_string_tuple_decode( &data[offset+hints_offset] );
+                for(i = 0; i < result->loc_hints_size; i++){
+                    result->loc_hints[i] = strdup(cJSON_GetArrayItem( ref, i )->valuestring);
+                }
 
-                    break;
-
-                case FUTURE:
-                    sscanf( &data[offset], " \"%a[^\"]", &result->ref_id );
-
-                    break;
-
-                default:
-
-                    printf( "ERROR: Attempt to serialize unsupported reference type.\n" );
-
-                    break;
-
-            }
-
+                break;
 
         }
 
@@ -384,6 +347,8 @@ swref *sw_deserialize_ref( const char *data ){
     return result;
 
 }
+
+
 
 static char *sw_get_data_through_http( const swref *ref, size_t *size_out ){
 
@@ -445,6 +410,23 @@ static char *sw_get_data_through_http( const swref *ref, size_t *size_out ){
 
     if( size_out != NULL ) *size_out = data.size;
     return data.memory;
+
+}
+
+cJSON *sw_get_json_from_store( const swref *ref ){
+
+    cJSON *result = NULL;
+
+    char *str = sw_get_data_from_store( ref, NULL );
+
+    if( str != NULL ){
+
+        result = cJSON_Parse( str );
+        free(str);
+
+    }
+
+    return result;
 
 }
 
@@ -694,28 +676,22 @@ int sw_init( void ){
  *   src/python/skywriting/runtime/task_executor.py
  *   spawn_func( self, spawn_expre, args )
  */
-char *sw_create_json_task_descriptor( const char *new_task_id,
-                                      const char *output_task_id,
-                                      const char *current_task_id,
-                                      const char *handler,
-                                      const char *jsonenc_dependencies,
-                                      int const is_continuation ){
+cJSON *sw_create_json_task_descriptor( const char *new_task_id,
+                                       const char *output_task_id,
+                                       const char *current_task_id,
+                                       const char *handler,
+                                       cJSON *jsonenc_dependencies,
+                                       int const is_continuation ){
 
-    char *jsondesc;
+    cJSON *result = cJSON_CreateObject();
 
-    asprintf( &jsondesc, "{\"task_id\": \"%s\","
-                         " \"handler\": \"%s\","
-                         " \"dependencies\": %s,"
-                         " \"expected_outputs\": [\"%s\"],"
-                         " \"%s\": \"%s\" }",
+    cJSON_AddStringToObject( result, "task_id", new_task_id );
+    cJSON_AddStringToObject( result, "handler", handler );
+    cJSON_AddItemReferenceToObject( result, "dependencies", jsonenc_dependencies );
+    cJSON_AddItemToObject( result, "expected_outputs", cJSON_CreateStringArray( &output_task_id, 1 ) );
+    cJSON_AddStringToObject( result, (is_continuation ? "continues_task" : "parent" ), current_task_id );
 
-                        new_task_id,
-                        handler,
-                        jsonenc_dependencies,
-                        output_task_id,
-                        (is_continuation ? "continues_task" : "parent" ), current_task_id );
-
-    return jsondesc;
+    return result;
 
 }
 
@@ -729,17 +705,19 @@ int sw_spawntask( const char *new_task_id,
                   const char *master_url,
                   const char *parent_task_id,
                   const char *handler,
-                  const char *jsonenc_dependencies,
+                  cJSON *jsonenc_dependencies,
                   int const is_continuation ){
 
     struct MemoryStruct postdata;
 
-    char *tmp;
     char *post_url;
     char *post_payload;
 
     CURLcode result;
     CURL *handle;
+
+    cJSON *task_desc;
+    cJSON *task_desc_list;
 
     struct curl_slist *chunk;
 
@@ -757,16 +735,18 @@ int sw_spawntask( const char *new_task_id,
     curl_easy_setopt( handle, CURLOPT_URL, post_url );
     free( post_url );
 
-    tmp = sw_create_json_task_descriptor( new_task_id,
-                                          output_task_id,
-                                          parent_task_id,
-                                          handler,
-                                          jsonenc_dependencies,
-                                          is_continuation );
+    task_desc = sw_create_json_task_descriptor( new_task_id,
+                                                output_task_id,
+                                                parent_task_id,
+                                                handler,
+                                                jsonenc_dependencies,
+                                                is_continuation );
 
+    task_desc_list = cJSON_CreateArray();
+    cJSON_AddItemToArray( task_desc_list, task_desc );
 
-    asprintf( &post_payload, "[%s]", (char *)tmp );
-    free( tmp );
+    post_payload = cJSON_PrintUnformatted( task_desc_list );
+    cJSON_Delete( task_desc_list );
 
     curl_easy_setopt( handle, CURLOPT_POST, 1 );
     curl_easy_setopt( handle, CURLOPT_READFUNCTION, &ReadMemoryCallback );
@@ -789,7 +769,7 @@ int sw_spawntask( const char *new_task_id,
     curl_easy_cleanup( handle );
     curl_slist_free_all( chunk );
 
-    return (result == 0);
+    return (result == CURLE_OK);
 
 }
 
@@ -821,6 +801,6 @@ inline const char* sw_get_master_url( void ){
 
 inline const char* sw_get_block_store_path( void ){
     char *value = (char*)getenv( "SW_BLOCK_STORE" );
-    return (value != NULL ? value : "store" );
+    return (value != NULL ? value : "storeW1" );
 }
 
