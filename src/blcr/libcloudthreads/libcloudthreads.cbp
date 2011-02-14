@@ -64,7 +64,7 @@
 		<Unit filename="cldthread.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="cldthread_obj.c">
+		<Unit filename="cldvalue.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="curl_helper_functions.c">

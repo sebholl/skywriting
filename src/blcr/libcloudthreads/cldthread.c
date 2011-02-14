@@ -8,13 +8,13 @@
 
 #include "sw_blcr_glue.c"
 
-static cldthread_obj *_result = NULL;
+static cldvalue *_result = NULL;
 
 /* API */
 
 int cldthread_init( void ){
 
-    if(_result==NULL) _result = cldthread_none();
+    if(_result==NULL) _result = cldvalue_none();
     return blcr_init_framework() && sw_init();
 
 }
@@ -38,41 +38,30 @@ cldthread *cldthread_create( void *(*fptr)(void *), void *arg0 ){
 
     if( sw_blcr_task_checkpoint( thread_task_id, NULL, path, fptr, arg0 ) ){
 
-        int args_size;
-        int chkpt_size;
-
-        char *chkpt_file_id;
-        char *args_id;
         char *jsonenc_dpnds;
         char *jsonenc_args;
+        char *tmp;
 
-        chkpt_file_id = sw_post_file_to_worker( sw_get_current_worker_url(), path );
+        swref *chkpt_ref;
+        swref *args_ref;
 
-        {
-            struct stat buf;
+        chkpt_ref = sw_move_file_to_worker( NULL, path, NULL );
 
-            if( stat(path, &buf)==-1 ){
-                perror("cldthread_create: cannot retrieve checkpoint filesize");
-                return result;
-            }
+        tmp = sw_serialize_ref( chkpt_ref );
+        sw_free_ref( chkpt_ref );
 
-            chkpt_size = buf.st_size;
+        asprintf( &jsonenc_args, "{\"checkpoint\": %s }", tmp );
 
-        }
+        free( tmp );
 
-        args_size = asprintf( &jsonenc_args, "{\"checkpoint\": {\"__ref__\": [\"c2\", \"%s\", %d, [\"%s\"]]} }",
-                                             chkpt_file_id, chkpt_size, sw_get_current_worker_url() );
+        args_ref = sw_save_string_to_worker( NULL, NULL, jsonenc_args );
 
-        free( chkpt_file_id );
-
-        args_id = sw_post_string_to_worker( sw_get_current_worker_url(), NULL, jsonenc_args );
-
+        tmp = sw_serialize_ref( args_ref );
+        sw_free_ref( args_ref );
         free( jsonenc_args );
 
-        asprintf( &jsonenc_dpnds, "{\"_args\": {\"__ref__\": [\"c2\", \"%s\", %d, [\"%s\"]]} }",
-                                  args_id, args_size, sw_get_current_worker_url() );
-
-        free( args_id );
+        asprintf( &jsonenc_dpnds, "{\"_args\": %s }", tmp );
+        free( tmp );
 
         if( sw_spawntask( thread_task_id,
                           thread_output_id,
@@ -84,7 +73,7 @@ cldthread *cldthread_create( void *(*fptr)(void *), void *arg0 ){
 
             result = sw_create_thread_object();
             result->task_id = thread_task_id;
-            result->output_id = thread_output_id;
+            result->output_ref = sw_create_ref( FUTURE, thread_output_id, 0, sw_get_current_worker_url() );
             result->result = NULL;
 
         };
@@ -109,27 +98,34 @@ cldthread *cldthread_create( void *(*fptr)(void *), void *arg0 ){
 
 }
 
+void cldthread_free( cldthread *const thread ){
+
+    if(thread->task_id!=NULL) free(thread->task_id);
+    if(thread->output_ref!=NULL) sw_free_ref((void *)thread->output_ref);
+
+    free(thread);
+
+}
+
 int cldthread_joins( cldthread *thread[], size_t const thread_count ){
 
     size_t i;
 
     int result;
 
-    const char **output_ids;
+    const swref **output_refs;
 
-    output_ids = calloc( thread_count, sizeof( const char * ) );
+    output_refs = calloc( thread_count, sizeof( swref * ) );
 
-    for( i = 0; i < thread_count; i++ ) output_ids[i] = thread[i]->output_id;
+    for( i = 0; i < thread_count; i++ ) output_refs[i] = thread[i]->output_ref;
 
-    result = sw_blcr_wait_on_outputs( output_ids, thread_count );
-
-    free(output_ids);
+    result = sw_blcr_wait_on_outputs( output_refs, thread_count );
 
     for( i = 0; i < thread_count; i++ ){
-        thread[i]->result = cldthread_deserialize_obj( sw_get_data_from_store( sw_get_current_worker_url(),
-                                                                               thread[i]->output_id,
-                                                                               NULL ) );
+        thread[i]->result = cldvalue_deserialize( sw_get_data_from_store( output_refs[i], NULL ) );
     }
+
+    free(output_refs);
 
     return result;
 
@@ -147,15 +143,15 @@ void cldthread_submit_output( void *output ){
 
     char *data;
 
-    data = cldthread_serialize_obj( _result, output );
+    data = cldvalue_serialize( _result, output );
 
-    sw_post_string_to_worker( sw_get_current_worker_url(), sw_get_current_output_id(), data );
+    sw_save_string_to_worker( NULL, sw_get_current_output_id(), data );
 
     free( data );
 
 }
 
-void *cldthread_exit( cldthread_obj *result ){
+void *cldthread_exit( cldvalue *result ){
     if(_result!=NULL) free(_result);
     _result = result;
     return NULL;

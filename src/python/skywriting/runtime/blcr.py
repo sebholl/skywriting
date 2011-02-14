@@ -45,11 +45,13 @@ class BLCRTaskExecutionRecord:
         args_ref = None
         parsed_inputs = {}
         
-        for local_id, ref in self.inputs.items():
+        for local_id, ref in self.inputs.iteritems():
             if local_id == '_args':
                 args_ref = ref
             else:
                 parsed_inputs[local_id] = ref
+        
+        self.task_executor.block_store.retrieve_filenames_for_refs_eager( parsed_inputs.values() )
         
         return self.task_executor.block_store.retrieve_object_for_ref(args_ref, 'json')
     
@@ -79,16 +81,23 @@ class _BLCRCommonExecutor(SWExecutor):
 
     def __init__(self, args, continuation, expected_output_ids, master_proxy, fetch_limit=None):
         SWExecutor.__init__(self, args, continuation, expected_output_ids, master_proxy, fetch_limit)
+        
         self.args = args
         self.proc = None
-        self.env = os.environ.copy()
+        self.env = {}
+
+        self.env['SW_MASTER_URL'] = master_proxy.master_url
+        self.env['SW_OUTPUT_ID'] = expected_output_ids[0]
     
     def start_process(self, block_store):
 
         self.before_execute(block_store)
         cherrypy.engine.publish("worker_event", "Executor: running")
         
-        proc = subprocess.Popen(self.get_process_args(), shell=False, close_fds=True, env=self.env)
+        env = os.environ.copy();
+        env.update(self.env);
+        
+        proc = subprocess.Popen(self.get_process_args(), shell=False, close_fds=True, env=env )
         self.process_manage(proc)
         
         return proc
@@ -103,6 +112,12 @@ class _BLCRCommonExecutor(SWExecutor):
         return [];
 
     def _execute(self, block_store, task_id):
+        
+        self.task_id = task_id
+        
+        self.env['SW_WORKER_URL'] = block_store.netloc
+        self.env['SW_BLOCK_STORE'] = block_store.base_dir
+        self.env['SW_TASK_ID'] = task_id
         
         self.proc = self.start_process(block_store)
         add_running_child(self.proc)
@@ -144,8 +159,6 @@ class SWBLCRExecutor(_BLCRCommonExecutor):
         except KeyError:
             raise BlameUserException('Incorrect arguments to the SWBLCRExecutor: %s' % repr(args))
         
-        self.env['SW_MASTER_URL'] = master_proxy.master_url
-        self.env['SW_OUTPUT_ID'] = expected_output_ids[0]
         
     def get_process_args(self):
         cherrypy.log.error("SWBLCRExecutor package path : %s" % self.filenames, "SWBLCRExecutor", logging.INFO)
@@ -155,10 +168,6 @@ class SWBLCRExecutor(_BLCRCommonExecutor):
         cherrypy.log.error("Running SWBLCRExecutor for : %s" % self.app_ref, "SWBLCRExecutor", logging.INFO)
         self.filenames = self.get_filenames_eager(block_store, [self.app_ref])
         
-    def _execute(self, block_store, task_id):
-        self.env['SW_WORKER_URL'] = block_store.netloc
-        self.env['SW_TASK_ID'] = task_id
-        return _BLCRCommonExecutor._execute(self, block_store, task_id)
         
 class BLCRExecutor(_BLCRCommonExecutor):
 
@@ -168,17 +177,10 @@ class BLCRExecutor(_BLCRCommonExecutor):
             self.checkpoint_ref = self.args['checkpoint']
         except KeyError:
             raise BlameUserException('Incorrect arguments to the BLCR executor: %s' % repr(self.args))
-        self.master_url = master_proxy.master_url
-        self.output_id = expected_output_ids[0]
 
     def before_execute(self, block_store):
         cherrypy.log.error("Running BLCR executor for checkpoint: %s" % self.checkpoint_ref, "BLCR", logging.INFO)
         self.checkpoint_filenames = self.get_filenames_eager(block_store, [self.checkpoint_ref])
-        
-    def _execute(self, block_store, task_id):
-        self.worker_url = block_store.netloc
-        self.task_id = task_id
-        return _BLCRCommonExecutor._execute(self, block_store, task_id)
         
     def process_manage(self, proc):
         filename = os.path.join('/tmp/', self.task_id)
@@ -190,10 +192,10 @@ class BLCRExecutor(_BLCRCommonExecutor):
         
         cherrypy.log.error("Writing to named pipe: %s" % filename, "BLCR", logging.INFO)
         
-        fifo.write("SW_MASTER_URL\n%s\n" % self.master_url );
-        fifo.write("SW_OUTPUT_ID\n%s\n" % self.output_id );
-        fifo.write("SW_WORKER_URL\n%s\n" % self.worker_url );
-        fifo.write("SW_TASK_ID\n%s\n" % self.task_id );
+        for name, value in self.env.items():
+            fifo.write("%s\n%s\n" % (name, value) );
+            
+        
         
         cherrypy.log.error("Closing named pipe: %s" % filename, "BLCR", logging.INFO)
         

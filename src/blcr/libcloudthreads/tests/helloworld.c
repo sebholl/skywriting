@@ -33,14 +33,14 @@ int main(int argc, char *argv[])
     cldthread_joins( threads, 4 );
 
     for( i = 0; i < 4; i++ ){
-        asprintf( &ret_value, "%sThread %d Output: \"%s\"\n", tmp, i, threads[i]->result->value.string );
+        asprintf( &ret_value, "%sThread %d Output: \"%s\"\n", tmp, i, cldvalue_to_string(threads[i]->result) );
         free(tmp);
         tmp = ret_value;
     }
 
     printf( "Finished!\n" );
 
-    cldthread_exit( cldthread_string( ret_value ) );
+    cldthread_exit( cldvalue_string( ret_value ) );
     cldthread_submit_output( NULL );
 
     return 0;
@@ -54,11 +54,11 @@ void *my_thread(int thread_id)
     int count = 1;
     printf( "Thread ID %d\n", thread_id );
     while(count <= 10){
-        printf( "%p: Hello World!\n", (void*)count++ );
+        printf( "%d: Hello World!\n", count++ );
         sleep(1);
     }
 
     asprintf( &ret_value, "I've finished! (Thread ID: %d)", thread_id );
 
-    return cldthread_exit( cldthread_string( ret_value ) );
+    return cldthread_exit( cldvalue_string( ret_value ) );
 }

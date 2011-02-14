@@ -1,5 +1,7 @@
 #pragma once
 
+#include "swref.h"
+
 #define VERBOSE 1
 
 int sw_init( void );
@@ -20,11 +22,9 @@ int sw_spawntask( const char *new_task_id,
 
 int sw_abort_task( const char *master_url, const char *task_id );
 
-char *sw_post_string_to_worker( const char *worker_url, const char *id, const char *str );
-char *sw_post_data_to_worker( const char *worker_url, const char *id, const void *data, size_t size );
-char *sw_post_file_to_worker( const char *worker_url, const char *filepath );
-
-char *sw_get_data_from_store( const char *worker_url, const char *id, size_t *size_out );
+swref *sw_save_string_to_worker( const char *worker_url, const char *id, const char *str );
+swref *sw_save_data_to_worker( const char *worker_url, const char *id, const void *data, size_t size );
+swref *sw_move_file_to_worker( const char *worker_url, const char *filepath, const char *id );
 
 char *sw_get_new_task_id( const char *current_task_id, const char *task_type );
 
@@ -40,6 +40,8 @@ inline const char* sw_get_current_output_id( void );
 
 inline const char* sw_get_master_url( void );
 
+inline const char* sw_get_block_store_path( void );
+
 
 /* C implementation of
  *   src/python/skywriting/runtime/task_executor.py
@@ -54,4 +56,4 @@ char *sw_create_json_task_descriptor( const char *new_task_id,
 
 char *sw_sha1_hex_digest_from_bytes( const char *bytes, unsigned int len, int shouldFreeInput );
 
-
+char *sw_get_data_from_store( const swref *ref, size_t *size_out );
