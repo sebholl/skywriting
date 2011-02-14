@@ -11,7 +11,7 @@ import os
 import cherrypy
 from threading import Lock
 
-class BLCRTaskExecutionRecord:
+class CloudThreadTaskExecutionRecord:
     
     def __init__(self, task_descriptor, task_executor):
         self.task_id = task_descriptor['task_id']
@@ -58,8 +58,8 @@ class BLCRTaskExecutionRecord:
     def execute(self):        
         try:
             if self.is_running:
-                cherrypy.engine.publish("worker_event", "Choosing appropriate BLCR executor")
-                executor = BLCRExecutor( self.fetch_executor_args(), None, self.expected_outputs, self.task_executor.master_proxy)
+                cherrypy.engine.publish("worker_event", "Choosing appropriate CloudThread executor")
+                executor = CloudThreadExecutor( self.fetch_executor_args(), None, self.expected_outputs, self.task_executor.master_proxy)
                 with self._lock:
                     self.executor = executor
             if self.is_running:
@@ -71,13 +71,13 @@ class BLCRTaskExecutionRecord:
             else:
                 self.task_executor.master_proxy.failed_task(self.task_id)
         except MissingInputException as mie:
-            cherrypy.log.error('Missing input during BLCR task execution', 'BLCR', logging.ERROR, True)
+            cherrypy.log.error('Missing input during CloudThread task execution', 'CloudThread', logging.ERROR, True)
             self.task_executor.master_proxy.failed_task(self.task_id, 'MISSING_INPUT', bindings=mie.bindings)
         except:
-            cherrypy.log.error('Error during executor task execution', 'BLCR', logging.ERROR, True)
+            cherrypy.log.error('Error during executor task execution', 'CloudThread', logging.ERROR, True)
             self.task_executor.master_proxy.failed_task(self.task_id, 'RUNTIME_EXCEPTION')
 
-class _BLCRCommonExecutor(SWExecutor):
+class _CloudProcessCommonExecutor(SWExecutor):
 
     def __init__(self, args, continuation, expected_output_ids, master_proxy, fetch_limit=None):
         SWExecutor.__init__(self, args, continuation, expected_output_ids, master_proxy, fetch_limit)
@@ -86,7 +86,7 @@ class _BLCRCommonExecutor(SWExecutor):
         self.proc = None
         self.env = {}
 
-        self.env['SW_MASTER_URL'] = master_proxy.master_url
+        self.env['SW_MASTER_LOC'] = master_proxy.master_url.replace("http://", "", 1)
         self.env['SW_OUTPUT_ID'] = expected_output_ids[0]
     
     def start_process(self, block_store):
@@ -115,7 +115,7 @@ class _BLCRCommonExecutor(SWExecutor):
         
         self.task_id = task_id
         
-        self.env['SW_WORKER_URL'] = block_store.netloc
+        self.env['SW_WORKER_LOC'] = block_store.netloc.replace("http://", "", 1)
         self.env['SW_BLOCK_STORE'] = block_store.base_dir
         self.env['SW_TASK_ID'] = task_id
         
@@ -150,60 +150,60 @@ class _BLCRCommonExecutor(SWExecutor):
         if self.proc is not None:
             self.proc.kill()
 
-class SWBLCRExecutor(_BLCRCommonExecutor):
+class CloudAppExecutor(_CloudProcessCommonExecutor):
     def __init__(self, args, continuation, expected_output_ids, master_proxy, fetch_limit=None):
-        _BLCRCommonExecutor.__init__(self, args, continuation, expected_output_ids, master_proxy, fetch_limit)
+        _CloudProcessCommonExecutor.__init__(self, args, continuation, expected_output_ids, master_proxy, fetch_limit)
         
         try:
             self.app_ref = args['app_ref']
         except KeyError:
-            raise BlameUserException('Incorrect arguments to the SWBLCRExecutor: %s' % repr(args))
+            raise BlameUserException('Incorrect arguments to the CloudApp: %s' % repr(args))
         
         
     def get_process_args(self):
-        cherrypy.log.error("SWBLCRExecutor package path : %s" % self.filenames, "SWBLCRExecutor", logging.INFO)
+        cherrypy.log.error("CloudAppExecutor package path : %s" % self.filenames, "CloudAppExecutor", logging.INFO)
         return self.filenames
     
     def before_execute(self, block_store):
-        cherrypy.log.error("Running SWBLCRExecutor for : %s" % self.app_ref, "SWBLCRExecutor", logging.INFO)
+        cherrypy.log.error("Running CloudAppExecutor for : %s" % self.app_ref, "CloudAppExecutor", logging.INFO)
         self.filenames = self.get_filenames_eager(block_store, [self.app_ref])
         
         
-class BLCRExecutor(_BLCRCommonExecutor):
+class CloudThreadExecutor(_CloudProcessCommonExecutor):
 
     def __init__(self, args, continuation, expected_output_ids, master_proxy, fetch_limit=None):
-        _BLCRCommonExecutor.__init__(self, args, continuation, expected_output_ids, master_proxy, fetch_limit)
+        _CloudProcessCommonExecutor.__init__(self, args, continuation, expected_output_ids, master_proxy, fetch_limit)
         try:
             self.checkpoint_ref = self.args['checkpoint']
         except KeyError:
-            raise BlameUserException('Incorrect arguments to the BLCR executor: %s' % repr(self.args))
+            raise BlameUserException('Incorrect arguments to the CloudThread executor: %s' % repr(self.args))
 
     def before_execute(self, block_store):
-        cherrypy.log.error("Running BLCR executor for checkpoint: %s" % self.checkpoint_ref, "BLCR", logging.INFO)
+        cherrypy.log.error("Running CloudThread executor for checkpoint: %s" % self.checkpoint_ref, "CloudThreadExecutor", logging.INFO)
         self.checkpoint_filenames = self.get_filenames_eager(block_store, [self.checkpoint_ref])
         
     def process_manage(self, proc):
         filename = os.path.join('/tmp/', self.task_id)
         
-        cherrypy.log.error("Opening named pipe: %s" % filename, "BLCR", logging.INFO)
+        cherrypy.log.error("Opening named pipe: %s" % filename, "CloudThreadExecutor", logging.INFO)
         
         os.mkfifo(filename)
         fifo = open(filename, 'w')
         
-        cherrypy.log.error("Writing to named pipe: %s" % filename, "BLCR", logging.INFO)
+        cherrypy.log.error("Writing to named pipe: %s" % filename, "CloudThreadExecutor", logging.INFO)
         
         for name, value in self.env.items():
             fifo.write("%s\n%s\n" % (name, value) );
             
         
         
-        cherrypy.log.error("Closing named pipe: %s" % filename, "BLCR", logging.INFO)
+        cherrypy.log.error("Closing named pipe: %s" % filename, "CloudThreadExecutor", logging.INFO)
         
         fifo.close()
         
-        cherrypy.log.error("Closed named pipe: %s" % filename, "BLCR", logging.INFO)
+        cherrypy.log.error("Closed named pipe: %s" % filename, "CloudThreadExecutor", logging.INFO)
 
     def get_process_args(self):
-        cherrypy.log.error("BLCRExecutor checkpoint path : %s" % self.checkpoint_filenames, "BLCR", logging.INFO)
+        cherrypy.log.error("CloudThreadExecutor checkpoint path : %s" % self.checkpoint_filenames, "CloudThreadExecutor", logging.INFO)
         return ["cr_restart", "--no-restore-pid", self.checkpoint_filenames[0] ]
 

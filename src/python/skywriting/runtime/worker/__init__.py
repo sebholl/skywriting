@@ -24,7 +24,7 @@ from skywriting.runtime.task_executor import TaskExecutorPlugin, SWInterpreterTa
 from skywriting.runtime.block_store import BlockStore
 from skywriting.runtime.worker.worker_view import WorkerRoot
 from skywriting.runtime.executors import ExecutionFeatures
-from skywriting.runtime.blcr import BLCRExecutor, SWBLCRExecutor, BLCRTaskExecutionRecord
+from skywriting.runtime.cldthread import CloudThreadExecutor, CloudAppExecutor, CloudThreadTaskExecutionRecord
 from skywriting.runtime.worker.pinger import Pinger
 from cherrypy.process import plugins
 import logging
@@ -67,11 +67,11 @@ class Worker(plugins.SimplePlugin):
         
         
         self.execution_features = ExecutionFeatures()
-        self.execution_features.register_executor('sw-blcr', SWBLCRExecutor)
-        self.execution_features.register_executor('blcr', None )
+        self.execution_features.register_executor('cloudapp', CloudAppExecutor)
+        self.execution_features.register_executor('cldthread', None )
         
         self.execution_record_types = {'swi': SWInterpreterTaskExecutionRecord,
-                                       'blcr': BLCRTaskExecutionRecord }
+                                       'cldthread': CloudThreadTaskExecutionRecord }
         
         self.task_executor = TaskExecutorPlugin(bus, self.block_store, self.master_proxy, self.execution_features, self.execution_record_types, 1)
         self.task_executor.subscribe()

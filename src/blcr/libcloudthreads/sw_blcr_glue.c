@@ -156,9 +156,9 @@ static int sw_blcr_wait_on_outputs( const swref *output_refs[], size_t id_count 
         /* Attempt to POST a new task to CIEL */
         result = sw_spawntask( cont_task_id,
                                sw_get_current_output_id(),
-                               sw_get_master_url(),
+                               sw_get_master_loc(),
                                sw_get_current_task_id(),
-                               "blcr",
+                               "cldthread",
                                jsonenc_dpnds,
                                1 );
 

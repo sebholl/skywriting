@@ -15,9 +15,9 @@
 
 static int spawn_count = 0;
 
-swref *sw_save_string_to_worker( const char *worker_url, const char *id, const char *str ){
+swref *sw_save_string_to_worker( const char *worker_loc, const char *id, const char *str ){
 
-    return sw_save_data_to_worker( worker_url, id, str, strlen(str) );
+    return sw_save_data_to_worker( worker_loc, id, str, strlen(str) );
 
 }
 
@@ -94,11 +94,11 @@ static swref *sw_write_block_store( const char *id, const void *data, size_t siz
 
     }
 
-    return (proceed ? sw_create_ref( CONCRETE, id, size, sw_get_current_worker_url() ) : NULL );
+    return (proceed ? sw_create_ref( CONCRETE, id, size, sw_get_current_worker_loc() ) : NULL );
 
 }
 
-static swref *sw_post_data_to_worker( const char *worker_url, const char *id, const void *data, size_t size ){
+static swref *sw_post_data_to_worker( const char *worker_loc, const char *id, const void *data, size_t size ){
 
     struct MemoryStruct post_data;
 
@@ -128,7 +128,7 @@ static swref *sw_post_data_to_worker( const char *worker_url, const char *id, co
 
     curl_easy_setopt( handle, CURLOPT_POSTFIELDSIZE, post_data.size );
 
-    asprintf( &post_url, "%s/data/%s/", worker_url, id );
+    asprintf( &post_url, "http://%s/data/%s/", worker_loc, id );
 
     #if VERBOSE
     printf("Uploading data to \"%s\".\n", post_url );
@@ -148,7 +148,7 @@ static swref *sw_post_data_to_worker( const char *worker_url, const char *id, co
 
     if( result==CURLE_OK ){
 
-        return sw_create_ref( CONCRETE, id, size, worker_url );
+        return sw_create_ref( CONCRETE, id, size, worker_loc );
 
     } else {
 
@@ -159,18 +159,18 @@ static swref *sw_post_data_to_worker( const char *worker_url, const char *id, co
 
 }
 
-swref *sw_save_data_to_worker( const char *worker_url, const char *id, const void *data, size_t size ){
+swref *sw_save_data_to_worker( const char *worker_loc, const char *id, const void *data, size_t size ){
 
     swref *result = NULL;
 
     char *_id = (id == NULL) ? sw_get_new_task_id( sw_get_current_task_id(), "string" )
                              : (char *)id;
 
-    if( (worker_url == NULL) || ( strcasecmp( worker_url, sw_get_current_worker_url() ) == 0) ){
+    if( (worker_loc == NULL) || ( strcasecmp( worker_loc, sw_get_current_worker_loc() ) == 0) ){
 
         if( sw_write_block_store( _id, data, size ) ) {
 
-            result = sw_create_ref( CONCRETE, _id, size, sw_get_current_worker_url() );
+            result = sw_create_ref( CONCRETE, _id, size, sw_get_current_worker_loc() );
 
         } else {
 
@@ -180,9 +180,9 @@ swref *sw_save_data_to_worker( const char *worker_url, const char *id, const voi
 
     } else {
 
-        if( sw_post_data_to_worker( worker_url, _id, data, size ) ) {
+        if( sw_post_data_to_worker( worker_loc, _id, data, size ) ) {
 
-            result = sw_create_ref( CONCRETE, _id, size, worker_url );
+            result = sw_create_ref( CONCRETE, _id, size, worker_loc );
 
         }
 
@@ -461,7 +461,7 @@ char *sw_get_data_from_store( const swref *ref, size_t *size_out ){
 
 }
 
-int sw_abort_task( const char *master_url, const char *task_id ){
+int sw_abort_task( const char *master_loc, const char *task_id ){
 
     char *post_url;
 
@@ -477,7 +477,7 @@ int sw_abort_task( const char *master_url, const char *task_id ){
     curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
     #endif
 
-    asprintf( &post_url, "%s/%s/abort/", master_url, task_id );
+    asprintf( &post_url, "http://%s/%s/abort/", master_loc, task_id );
 
     curl_easy_setopt( handle, CURLOPT_URL, post_url );
     free( post_url );
@@ -490,7 +490,7 @@ int sw_abort_task( const char *master_url, const char *task_id ){
 
 }
 
-static swref *sw_post_file_to_worker( const char *worker_url, const char *filepath ){
+static swref *sw_post_file_to_worker( const char *worker_loc, const char *filepath ){
 
     char *post_url;
     char *id;
@@ -532,7 +532,7 @@ static swref *sw_post_file_to_worker( const char *worker_url, const char *filepa
 
     id = sw_get_new_task_id( sw_get_current_task_id(), "file" );
 
-    asprintf( &post_url, "%s/data/%s/", worker_url, id );
+    asprintf( &post_url, "http://%s/data/%s/", worker_loc, id );
 
     #if VERBOSE
     printf("Uploading file \"%s\" to \"%s\".\n", filepath, post_url );
@@ -562,7 +562,7 @@ static swref *sw_post_file_to_worker( const char *worker_url, const char *filepa
 
     }
 
-    ref = sw_create_ref( CONCRETE, id, buf.st_size, worker_url );
+    ref = sw_create_ref( CONCRETE, id, buf.st_size, worker_loc );
     free( id );
 
     return ref;
@@ -576,7 +576,7 @@ swref *sw_move_file_to_worker( const char *worker_url, const char *filepath, con
     char *_id = (id == NULL) ? sw_get_new_task_id( sw_get_current_task_id(), "string" )
                              : (char *)id;
 
-    if( (worker_url == NULL) || ( strcasecmp( worker_url, sw_get_current_worker_url() ) == 0) ){
+    if( (worker_url == NULL) || ( strcasecmp( worker_url, sw_get_current_worker_loc() ) == 0) ){
 
         struct stat buf;
 
@@ -587,7 +587,7 @@ swref *sw_move_file_to_worker( const char *worker_url, const char *filepath, con
 
         if(sw_move_to_block_store( filepath, _id )){
 
-            result = sw_create_ref( CONCRETE, _id, buf.st_size, sw_get_current_worker_url() );
+            result = sw_create_ref( CONCRETE, _id, buf.st_size, sw_get_current_worker_loc() );
 
         }
 
@@ -702,7 +702,7 @@ cJSON *sw_create_json_task_descriptor( const char *new_task_id,
  */
 int sw_spawntask( const char *new_task_id,
                   const char *output_task_id,
-                  const char *master_url,
+                  const char *master_loc,
                   const char *parent_task_id,
                   const char *handler,
                   cJSON *jsonenc_dependencies,
@@ -731,7 +731,7 @@ int sw_spawntask( const char *new_task_id,
     curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
     #endif
 
-    asprintf( &post_url, "%s/task/%s/spawn", (char *)master_url, (char *)parent_task_id );
+    asprintf( &post_url, "http://%s/task/%s/spawn", (char *)master_loc, (char *)parent_task_id );
     curl_easy_setopt( handle, CURLOPT_URL, post_url );
     free( post_url );
 
@@ -774,9 +774,9 @@ int sw_spawntask( const char *new_task_id,
 }
 
 
-inline const char* sw_get_current_worker_url( void ){
-    char *value = (char*)getenv( "SW_WORKER_URL" );
-    return (value != NULL ? value : "http://localhost:9001" );
+inline const char* sw_get_current_worker_loc( void ){
+    char *value = (char*)getenv( "SW_WORKER_LOC" );
+    return (value != NULL ? value : "localhost:9001" );
 
 }
 
@@ -794,9 +794,9 @@ inline const char* sw_get_current_task_id( void ){
     return (value != NULL ? value : "1234" );
 }
 
-inline const char* sw_get_master_url( void ){
-    char *value = (char*)getenv( "SW_MASTER_URL" );
-    return (value != NULL ? value : "http://localhost:9000" );
+inline const char* sw_get_master_loc( void ){
+    char *value = (char*)getenv( "SW_MASTER_LOC" );
+    return (value != NULL ? value : "localhost:9000" );
 }
 
 inline const char* sw_get_block_store_path( void ){

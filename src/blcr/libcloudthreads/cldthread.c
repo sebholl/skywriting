@@ -34,7 +34,7 @@ cldthread *cldthread_create( void *(*fptr)(void *), void *arg0 ){
 
     /* Create values for the new task */
     thread_task_id = sw_get_new_task_id( sw_get_current_task_id(), "thread" );
-    thread_output_id = sw_get_new_output_id( "blcr", thread_task_id );
+    thread_output_id = sw_get_new_output_id( "cldthread", thread_task_id );
 
     if( sw_blcr_task_checkpoint( thread_task_id, NULL, path, fptr, arg0 ) ){
 
@@ -45,27 +45,17 @@ cldthread *cldthread_create( void *(*fptr)(void *), void *arg0 ){
         swref *chkpt_ref;
         swref *args_ref;
 
-        printf("Hey...\n");
-
         /* Post arguments as data in the block store */
 
         jsonenc_args = cJSON_CreateObject();
 
-        printf("Over here...\n");
-
         chkpt_ref = sw_move_file_to_worker( NULL, path, NULL );
-
-        printf("What you looking at? %p %s\n", chkpt_ref, path);
 
         cJSON_AddItemToObject( jsonenc_args, "checkpoint", sw_serialize_ref( chkpt_ref ) );
         sw_free_ref( chkpt_ref );
 
-        printf("Up to here...\n");
-
         tmp = cJSON_PrintUnformatted( jsonenc_args );
         cJSON_Delete( jsonenc_args );
-
-        printf("And then a little bit further\n");
 
         args_ref = sw_save_string_to_worker( NULL, NULL, tmp );
         free( tmp );
@@ -78,15 +68,15 @@ cldthread *cldthread_create( void *(*fptr)(void *), void *arg0 ){
 
         if( sw_spawntask( thread_task_id,
                           thread_output_id,
-                          sw_get_master_url(),
+                          sw_get_master_loc(),
                           sw_get_current_task_id(),
-                          "blcr",
+                          "cldthread",
                           jsonenc_dpnds,
                           0 )                          ) {
 
             result = sw_create_thread_object();
             result->task_id = thread_task_id;
-            result->output_ref = sw_create_ref( FUTURE, thread_output_id, 0, sw_get_current_worker_url() );
+            result->output_ref = sw_create_ref( FUTURE, thread_output_id, 0, sw_get_current_worker_loc() );
             result->result = NULL;
 
         };

@@ -2,7 +2,7 @@
 
 #include "swref.h"
 
-#define VERBOSE 1
+//#define VERBOSE 1
 
 int sw_init( void );
 
@@ -14,7 +14,7 @@ int sw_init( void );
 
 int sw_spawntask( const char *new_task_id,
                   const char *output_task_id,
-                  const char *master_url,
+                  const char *master_loc,
                   const char *parent_task_id,
                   const char *handler,
                   cJSON *jsonenc_dependencies,
@@ -22,23 +22,23 @@ int sw_spawntask( const char *new_task_id,
 
 int sw_abort_task( const char *master_url, const char *task_id );
 
-swref *sw_save_string_to_worker( const char *worker_url, const char *id, const char *str );
-swref *sw_save_data_to_worker( const char *worker_url, const char *id, const void *data, size_t size );
-swref *sw_move_file_to_worker( const char *worker_url, const char *filepath, const char *id );
+swref *sw_save_string_to_worker( const char *worker_loc, const char *id, const char *str );
+swref *sw_save_data_to_worker( const char *worker_loc, const char *id, const void *data, size_t size );
+swref *sw_move_file_to_worker( const char *worker_loc, const char *filepath, const char *id );
 
 char *sw_get_new_task_id( const char *current_task_id, const char *task_type );
 
 char *sw_get_new_output_id( const char *handler, const char *task_id );
 
 
-inline const char* sw_get_current_worker_url( void );
+inline const char* sw_get_current_worker_loc( void );
 
 inline int sw_set_current_task_id( const char *taskid );
 inline const char* sw_get_current_task_id( void );
 
 inline const char* sw_get_current_output_id( void );
 
-inline const char* sw_get_master_url( void );
+inline const char* sw_get_master_loc( void );
 
 inline const char* sw_get_block_store_path( void );
 
