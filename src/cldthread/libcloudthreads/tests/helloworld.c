@@ -41,10 +41,8 @@ int main(int argc, char *argv[])
 
     printf( "Finished!\n" );
 
-    cldthread_exit( cldvalue_string( ret_value ) );
-    cldthread_submit_output( NULL );
+    return cldapp_exit( cldvalue_string( ret_value ) );
 
-    return 0;
 }
 
 

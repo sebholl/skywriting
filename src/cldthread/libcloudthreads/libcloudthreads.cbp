@@ -7,31 +7,10 @@
 		<Option default_target="helloworld" />
 		<Option compiler="gcc" />
 		<Build>
-			<Target title="Debug">
-				<Option output="bin/libcloudthreads" prefix_auto="1" extension_auto="1" />
-				<Option object_output="obj/" />
-				<Option type="1" />
-				<Option compiler="gcc" />
-				<Compiler>
-					<Add option="-g" />
-				</Compiler>
-			</Target>
-			<Target title="Release">
-				<Option output="bin/libcloudthreads" prefix_auto="1" extension_auto="1" />
-				<Option object_output="obj/" />
-				<Option type="1" />
-				<Option compiler="gcc" />
-				<Compiler>
-					<Add option="-O2" />
-				</Compiler>
-				<Linker>
-					<Add option="-s" />
-				</Linker>
-			</Target>
-			<Target title="sw_blcr">
+			<Target title="libCloudThreads">
 				<Option output="libcloudthreads" prefix_auto="1" extension_auto="1" />
 				<Option working_dir="" />
-				<Option object_output="obj/sw_blcr/" />
+				<Option object_output="obj/lib/" />
 				<Option type="2" />
 				<Option compiler="gcc" />
 				<Option createDefFile="1" />
@@ -40,8 +19,8 @@
 				</Compiler>
 			</Target>
 			<Target title="helloworld">
-				<Option output="bin/helloworld/libcloudthreads" prefix_auto="1" extension_auto="1" />
-				<Option working_dir="bin/helloworld/" />
+				<Option output="bin/helloworld/helloworld" prefix_auto="1" extension_auto="1" />
+				<Option working_dir="../../../../" />
 				<Option object_output="obj/helloworld/" />
 				<Option type="1" />
 				<Option compiler="gcc" />
@@ -58,7 +37,20 @@
 			<Add library="libssl" />
 			<Add library="libcurl" />
 		</Linker>
+		<Unit filename="_cldthread.c">
+			<Option compilerVar="CC" />
+			<Option compile="0" />
+			<Option link="0" />
+		</Unit>
+		<Unit filename="_sw_interface.c">
+			<Option compilerVar="CC" />
+			<Option compile="0" />
+			<Option link="0" />
+		</Unit>
 		<Unit filename="blcr_interface.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="cJSON.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="cldthread.c">
@@ -70,12 +62,10 @@
 		<Unit filename="curl_helper_functions.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="sw_blcr_glue.c">
-			<Option compilerVar="CC" />
-			<Option compile="0" />
-			<Option link="0" />
-		</Unit>
 		<Unit filename="sw_interface.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="swref.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="tests/helloworld.c">

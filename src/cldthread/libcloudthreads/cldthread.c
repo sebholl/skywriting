@@ -1,12 +1,12 @@
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/stat.h>
 #include <string.h>
+#include "cJSON.h"
 
 #include "cldthread.h"
 
-#include "sw_blcr_glue.c"
+#include "_cldthread.c"
 
 static cldvalue *_result = NULL;
 
@@ -33,10 +33,10 @@ cldthread *cldthread_create( void *(*fptr)(void *), void *arg0 ){
     result = NULL;
 
     /* Create values for the new task */
-    thread_task_id = sw_get_new_task_id( sw_get_current_task_id(), "thread" );
-    thread_output_id = sw_get_new_output_id( "cldthread", thread_task_id );
+    thread_task_id = sw_generate_new_task_id( "thread" );
+    thread_output_id = sw_generate_output_id( thread_task_id, "cldthread" );
 
-    if( sw_blcr_task_checkpoint( thread_task_id, NULL, path, fptr, arg0 ) ){
+    if( _cldthread_task_checkpoint( thread_task_id, NULL, path, fptr, arg0 ) ){
 
         cJSON *jsonenc_dpnds;
         cJSON *jsonenc_args;
@@ -49,7 +49,7 @@ cldthread *cldthread_create( void *(*fptr)(void *), void *arg0 ){
 
         jsonenc_args = cJSON_CreateObject();
 
-        chkpt_ref = sw_move_file_to_worker( NULL, path, NULL );
+        chkpt_ref = sw_move_file_to_store( NULL, path, NULL );
 
         cJSON_AddItemToObject( jsonenc_args, "checkpoint", sw_serialize_ref( chkpt_ref ) );
         sw_free_ref( chkpt_ref );
@@ -57,7 +57,7 @@ cldthread *cldthread_create( void *(*fptr)(void *), void *arg0 ){
         tmp = cJSON_PrintUnformatted( jsonenc_args );
         cJSON_Delete( jsonenc_args );
 
-        args_ref = sw_save_string_to_worker( NULL, NULL, tmp );
+        args_ref = sw_save_string_to_store( NULL, NULL, tmp );
         free( tmp );
 
         /* Then create the task */
@@ -74,7 +74,7 @@ cldthread *cldthread_create( void *(*fptr)(void *), void *arg0 ){
                           jsonenc_dpnds,
                           0 )                          ) {
 
-            result = sw_create_thread_object();
+            result = _create_cldthread_object();
             result->task_id = thread_task_id;
             result->output_ref = sw_create_ref( FUTURE, thread_output_id, 0, sw_get_current_worker_loc() );
             result->result = NULL;
@@ -86,14 +86,14 @@ cldthread *cldthread_create( void *(*fptr)(void *), void *arg0 ){
 
     } else {
 
-        free( thread_task_id );
-        free( thread_output_id );
-
         /* There has been an error... */
 
         perror( "Couldn't checkpoint process so we should perhaps resort to local threading.\n" );
 
     }
+
+    free( thread_task_id );
+    free( thread_output_id );
 
     free( path );
 
@@ -101,14 +101,91 @@ cldthread *cldthread_create( void *(*fptr)(void *), void *arg0 ){
 
 }
 
-void cldthread_free( cldthread *const thread ){
+static int _cldthread_wait_on_outputs( const swref *output_refs[], size_t id_count ){
 
-    if(thread->task_id!=NULL) free(thread->task_id);
-    if(thread->output_ref!=NULL) sw_free_ref((void *)thread->output_ref);
+    int result;
 
-    free(thread);
+    char *path;
+    char *cont_task_id;
+
+    asprintf( &path, "%s.checkpoint.continuation", sw_get_current_task_id() );
+
+    /* Create a task ID for the new continuation task */
+    cont_task_id = sw_generate_new_task_id( "cont" );
+
+    result = _cldthread_task_checkpoint( cont_task_id, NULL, path, NULL, NULL );
+
+    if( result > 0 ){
+
+        size_t i;
+
+        cJSON *jsonenc_args;
+        cJSON *jsonenc_dpnds;
+
+        swref *chkpt_ref;
+        swref *args_ref;
+
+        char *tmp;
+
+        jsonenc_args = cJSON_CreateObject();
+
+        chkpt_ref = sw_move_file_to_store( NULL, path, NULL );
+        cJSON_AddItemToObject( jsonenc_args, "checkpoint", sw_serialize_ref( chkpt_ref ) );
+        sw_free_ref( chkpt_ref );
+
+        tmp = cJSON_PrintUnformatted( jsonenc_args );
+        cJSON_Delete( jsonenc_args );
+
+        args_ref = sw_save_string_to_store( NULL, NULL, tmp );
+        free( tmp );
+
+
+        jsonenc_dpnds = cJSON_CreateObject();
+
+        cJSON_AddItemToObject( jsonenc_dpnds, "_args", sw_serialize_ref( args_ref ) );
+        sw_free_ref( args_ref );
+
+        for(i = 0; i < id_count; i++ ){
+            asprintf( &tmp, "thread%d_output", i );
+            cJSON_AddItemToObject( jsonenc_dpnds, tmp, sw_serialize_ref( output_refs[i] ) );
+            free(tmp);
+        }
+
+
+        /* Attempt to POST a new task to CIEL */
+        result = sw_spawntask( cont_task_id,
+                               sw_get_current_output_id(),
+                               sw_get_master_loc(),
+                               sw_get_current_task_id(),
+                               "cldthread",
+                               jsonenc_dpnds,
+                               1 );
+
+        cJSON_Delete( jsonenc_dpnds );
+
+        /* If we managed to spawn a new continuation task, then terminate this process */
+        if( result ) exit( 20 );
+
+        /* Otherwise, clean-up and return (we can't really do anything else) */
+        free( tmp );
+
+    } else if (result < 0) {
+
+
+
+    } else {
+
+        perror( "Couldn't checkpoint continuation task - we should try and work out a way to recover from this.\n" );
+
+    }
+
+    free( cont_task_id );
+    free( path );
+
+    return result;
 
 }
+
 
 int cldthread_joins( cldthread *thread[], size_t const thread_count ){
 
@@ -124,7 +201,7 @@ int cldthread_joins( cldthread *thread[], size_t const thread_count ){
 
     for( i = 0; i < thread_count; i++ ) output_refs[i] = thread[i]->output_ref;
 
-    result = sw_blcr_wait_on_outputs( output_refs, thread_count );
+    result = _cldthread_wait_on_outputs( output_refs, thread_count );
 
     for( i = 0; i < thread_count; i++ ){
         json = sw_get_json_from_store( output_refs[i] );
@@ -138,34 +215,19 @@ int cldthread_joins( cldthread *thread[], size_t const thread_count ){
 
 }
 
-inline int cldthread_join( cldthread *thread ){
-
-    return cldthread_joins( &thread, 1 );
-
-}
-
-
-
-void cldthread_submit_output( void *output ){
-
-    cJSON *json;
-    char *tmp;
-
-    json = cldvalue_serialize( _result, output );
-    tmp = cJSON_PrintUnformatted( json );
-    cJSON_Delete( json );
-
-    sw_save_string_to_worker( NULL, sw_get_current_output_id(), tmp );
-
-    free( tmp );
-
-}
-
 void *cldthread_exit( cldvalue *result ){
-    if(_result!=NULL) free(_result);
-    _result = result;
-    return NULL;
+    _cldthread_submit_output( result, NULL );
+    exit(EXIT_SUCCESS);
+    return 0;
 }
 
+void cldthread_free( cldthread *const thread ){
 
+    if(thread->task_id!=NULL) free(thread->task_id);
+    if(thread->output_ref!=NULL) sw_free_ref((void *)thread->output_ref);
+    if(thread->result!=NULL) cldvalue_free(thread->result);
+
+    free(thread);
+
+}
 

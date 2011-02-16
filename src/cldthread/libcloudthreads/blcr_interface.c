@@ -62,7 +62,7 @@ int blcr_checkpoint( const char *filepath ){
 
     args.cr_scope = BLCR_CRSCOPE;
 
-    args.cr_fd = open( (const char *) filepath, O_WRONLY | O_CREAT | O_TRUNC , 0600);
+    args.cr_fd = open( filepath, O_WRONLY | O_CREAT | O_TRUNC , 0600);
 
     blcr_checkpoint_status = blcr_error;
 
@@ -105,6 +105,21 @@ int blcr_checkpoint( const char *filepath ){
 
 }
 
+
+char *blcr_generate_context_filename(void)
+{
+    char *p, *context_filename;
+
+    if ( (p = getcwd(NULL, 0)) == NULL) return NULL;
+
+    asprintf( &context_filename, "%s/context.%d.%d", p, getpid(), checkpoint_count );
+
+    free(p);
+
+    return (char *)context_filename;
+}
+
+
 /* Helper Functions */
 
 static int blcr_callback(void *arg)
@@ -124,18 +139,5 @@ static int blcr_callback(void *arg)
     }
 
     return 0;
-}
-
-char *blcr_generate_context_filename(void)
-{
-    char *p, *context_filename;
-
-    if ( (p = getcwd(NULL, 0)) == NULL) return NULL;
-
-    asprintf( &context_filename, "%s/context.%d.%d", p, getpid(), checkpoint_count );
-
-    free(p);
-
-    return (char *)context_filename;
 }
 

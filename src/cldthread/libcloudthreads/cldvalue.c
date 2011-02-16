@@ -102,7 +102,7 @@ cJSON *cldvalue_serialize( cldvalue *obj, void *default_value ){
             cJSON_AddStringToObject( result, "value", obj->value.string );
             break;
         case BINARY:
-            ref = sw_save_data_to_worker( NULL, NULL, obj->value.data, obj->size );
+            ref = sw_save_data_to_store( NULL, NULL, obj->value.data, obj->size );
             cJSON_AddItemToObject( result, "ref", sw_serialize_ref( ref ) );
             break;
         default:
@@ -168,6 +168,23 @@ cldvalue *cldvalue_deserialize( cJSON *json ){
     }
 
     return result;
+
+}
+
+void cldvalue_free( cldvalue* obj ){
+
+    switch(obj->type){
+        case STRING:
+            free(obj->value.string);
+            break;
+        case BINARY:
+            free(obj->value.data);
+            break;
+        default:
+            break;
+    }
+
+    free(obj);
 
 }
 
