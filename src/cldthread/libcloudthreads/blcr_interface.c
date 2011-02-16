@@ -12,8 +12,8 @@
 #include "blcr_interface.h"
 
 /* Checkpointing Flags */
-int BLCR_CRFLAGS = CR_CHKPT_PTRACED_ALLOW|CR_CHKPT_DUMP_ALL;
-int BLCR_CRSCOPE = CR_SCOPE_PROC; /* See blcr_common.h */
+static int BLCR_CRFLAGS = CR_CHKPT_PTRACED_ALLOW|CR_CHKPT_DUMP_EXEC/*|CR_CHKPT_DUMP_ALL*/;
+static int BLCR_CRSCOPE = CR_SCOPE_PROC; /* See blcr_common.h */
 
 /* Enums and global variables */
 

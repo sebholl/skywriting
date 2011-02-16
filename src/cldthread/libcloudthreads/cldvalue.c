@@ -87,7 +87,6 @@ cJSON *cldvalue_serialize( cldvalue *obj, void *default_value ){
     cJSON *result = cJSON_CreateObject();
 
     cJSON_AddNumberToObject ( result, "type", obj->type );
-    cJSON_AddNumberToObject ( result, "size", obj->size );
 
     swref *ref = NULL;
 
@@ -104,6 +103,7 @@ cJSON *cldvalue_serialize( cldvalue *obj, void *default_value ){
         case BINARY:
             ref = sw_save_data_to_store( NULL, NULL, obj->value.data, obj->size );
             cJSON_AddItemToObject( result, "ref", sw_serialize_ref( ref ) );
+            cJSON_AddNumberToObject ( result, "size", obj->size );
             break;
         default:
             if( default_value != NULL ){
@@ -130,8 +130,6 @@ cldvalue *cldvalue_deserialize( cJSON *json ){
 
         result->type = (enum cldthread_result_type)cJSON_GetObjectItem(json,"type")->valueint;
 
-        result->size = (size_t)cJSON_GetObjectItem(json,"size")->valueint;
-
         switch( result->type ) {
 
             case INTEGER:
@@ -147,6 +145,7 @@ cldvalue *cldvalue_deserialize( cJSON *json ){
 
             case DATA:
 
+                result->size = (size_t)cJSON_GetObjectItem(json,"size")->valueint;
                 ref = sw_deserialize_ref( cJSON_GetObjectItem(json,"ref") );
 
                 if( ref != NULL ){

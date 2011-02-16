@@ -28,6 +28,16 @@
 					<Add option="-g" />
 				</Compiler>
 			</Target>
+			<Target title="pi">
+				<Option output="bin/pi/pi" prefix_auto="1" extension_auto="1" />
+				<Option working_dir="../../../../" />
+				<Option object_output="obj/pi/" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-g" />
+				</Compiler>
+			</Target>
 		</Build>
 		<Compiler>
 			<Add option="-Wall" />
@@ -50,27 +60,44 @@
 		<Unit filename="blcr_interface.c">
 			<Option compilerVar="CC" />
 		</Unit>
+		<Unit filename="blcr_interface.h" />
 		<Unit filename="cJSON.c">
 			<Option compilerVar="CC" />
 		</Unit>
+		<Unit filename="cJSON.h" />
 		<Unit filename="cldthread.c">
 			<Option compilerVar="CC" />
 		</Unit>
+		<Unit filename="cldthread.h" />
 		<Unit filename="cldvalue.c">
 			<Option compilerVar="CC" />
 		</Unit>
+		<Unit filename="cldvalue.h" />
 		<Unit filename="curl_helper_functions.c">
 			<Option compilerVar="CC" />
 		</Unit>
+		<Unit filename="curl_helper_functions.h" />
 		<Unit filename="sw_interface.c">
 			<Option compilerVar="CC" />
 		</Unit>
+		<Unit filename="sw_interface.h" />
 		<Unit filename="swref.c">
 			<Option compilerVar="CC" />
 		</Unit>
+		<Unit filename="swref.h" />
 		<Unit filename="tests/helloworld.c">
 			<Option compilerVar="CC" />
 			<Option target="helloworld" />
+		</Unit>
+		<Unit filename="tests/pi.c">
+			<Option compilerVar="CC" />
+			<Option target="pi" />
+		</Unit>
+		<Unit filename="tests/pi_halton.c">
+			<Option compilerVar="CC" />
+			<Option compile="0" />
+			<Option link="0" />
+			<Option target="pi" />
 		</Unit>
 		<Extensions>
 			<code_completion />
