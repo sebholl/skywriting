@@ -24,7 +24,6 @@ import cherrypy
 import collections
 import logging
 import uuid
-import simplejson
 
 class LazyTaskPool(plugins.SimplePlugin):
     
@@ -76,11 +75,8 @@ class LazyTaskPool(plugins.SimplePlugin):
         
     def get_reference_info(self, id):
         with self._lock:
-            ref = self.ref_for_output[id]
-            try:
-                consumers = self.consumers_for_output[id]
-            except KeyError:
-                consumers = []
+            ref = self.ref_for_output.get(id, SW2_FutureReference(id))
+            consumers = self.consumers_for_output.get(id,[])
             task = self.task_for_output[id]
             return {'ref': ref, 'consumers': list(consumers), 'task': task.as_descriptor()}
         

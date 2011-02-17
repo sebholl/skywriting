@@ -15,6 +15,7 @@ from __future__ import with_statement
 from cherrypy import HTTPError
 from skywriting.runtime.block_store import json_decode_object_hook,\
     SWReferenceJSONEncoder
+from skywriting.runtime.task import Task
 from cherrypy.lib.static import serve_file
 import sys
 import os
@@ -298,7 +299,15 @@ class MasterTaskRoot:
                 simplejson.dump(map(lambda x: x.as_descriptor(long=True), self.task_pool.tasks.values()), fp=task_file, cls=SWReferenceJSONEncoder)
                 task_file.close()
                 return serve_file(filename)
-            
+
+class SWRefInfoJSONEncoder(SWReferenceJSONEncoder):
+    
+    def default(self, obj):
+        if isinstance(obj, Task):
+            return obj.as_descriptor()
+        else:
+            return super(SWRefInfoJSONEncoder, self).default(obj)
+
 class ReferenceInfoRoot:
     
     def __init__(self, task_pool):
@@ -307,7 +316,7 @@ class ReferenceInfoRoot:
     @cherrypy.expose
     def default(self, id):
         try:
-            return simplejson.dumps(self.task_pool.get_reference_info(id), cls=SWReferenceJSONEncoder)
+            return simplejson.dumps(self.task_pool.get_reference_info(id), cls=SWRefInfoJSONEncoder)
         except KeyError:
             raise HTTPError(404)
                 
@@ -330,7 +339,7 @@ class GlobalDataRoot:
     def default(self, id, attribute=None):
         
         real_id = id
-        print "id: %s, attribute: %s" % (id, attribute)
+        
         if attribute is None:
             if cherrypy.request.method == 'POST':
                 # Add a new URL for the global ID.

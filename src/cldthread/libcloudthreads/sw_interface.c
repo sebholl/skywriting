@@ -24,7 +24,6 @@ int sw_init( void ){
 
 int sw_spawntask( const char *new_task_id,
                   const char *output_task_id,
-                  const char *master_loc,
                   const char *parent_task_id,
                   const char *handler,
                   cJSON *jsonenc_dependencies,
@@ -53,7 +52,7 @@ int sw_spawntask( const char *new_task_id,
     curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
     #endif
 
-    asprintf( &post_url, "http://%s/task/%s/spawn", (char *)master_loc, (char *)parent_task_id );
+    asprintf( &post_url, "http://%s/task/%s/spawn", sw_get_master_loc(), (char *)parent_task_id );
     curl_easy_setopt( handle, CURLOPT_URL, post_url );
     free( post_url );
 
@@ -94,6 +93,44 @@ int sw_spawntask( const char *new_task_id,
     return (result == CURLE_OK);
 
 }
+
+cJSON *sw_query_info_for_output_id( const char *output_id ){
+
+    cJSON *result = NULL;
+
+    struct MemoryStruct data = { NULL, 0, 0 };
+
+    char *post_url;
+
+    CURLcode response;
+    CURL *handle;
+
+    handle = curl_easy_init();
+
+    curl_easy_setopt( handle, CURLOPT_FAILONERROR, 1 );
+
+    #if VERBOSE
+    curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
+    #endif
+
+    curl_easy_setopt( handle, CURLOPT_WRITEFUNCTION, &WriteMemoryCallback );
+    curl_easy_setopt( handle, CURLOPT_WRITEDATA, &data );
+
+    asprintf( &post_url, "http://%s/refs/%s/", sw_get_master_loc(), (char *)output_id );
+    curl_easy_setopt( handle, CURLOPT_URL, post_url );
+    free( post_url );
+
+    response = curl_easy_perform( handle );
+    curl_easy_cleanup( handle );
+
+    if(response==CURLE_OK) result = cJSON_Parse( data.memory );
+
+    if(data.memory!=NULL) free(data.memory);
+
+    return result;
+
+}
+
 
 
 int sw_abort_task( const char *master_loc, const char *task_id ){
@@ -274,15 +311,15 @@ char *sw_generate_new_task_id( const char *task_type ){
 
 }
 
-char *sw_generate_output_id( const char *task_id, const char *handler ){
+char *sw_generate_output_id( const char *task_id, const void* const unique_id, const char *handler ){
 
     char *str;
     char *result;
     int len;
 
-    len = asprintf( &str, "%s:%s", handler, task_id );
+    len = asprintf( &str, "%s:%s:%p", handler, task_id, unique_id );
 
-    str = _sha1_hex_digest_from_bytes( str, len, 1 );
+    //str = _sha1_hex_digest_from_bytes( str, len, 1 );
 
     asprintf( &result, "%s:output", str );
 
@@ -291,6 +328,7 @@ char *sw_generate_output_id( const char *task_id, const char *handler ){
     return result;
 
 }
+
 
 inline int sw_set_current_task_id( const char *taskid ){
     return ( setenv( "SW_TASK_ID", taskid, 1 ) == 0 );

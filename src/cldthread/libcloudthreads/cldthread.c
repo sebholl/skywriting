@@ -19,7 +19,7 @@ int cldthread_init( void ){
 
 }
 
-cldthread *cldthread_create( void *(*fptr)(void *), void *arg0 ){
+cldthread *cldthread_smart_create( void *(*fptr)(void *), void *arg0, char *group_id ){
 
     char *path;
 
@@ -28,13 +28,44 @@ cldthread *cldthread_create( void *(*fptr)(void *), void *arg0 ){
 
     cldthread *result;
 
-    asprintf( &path, "%s.checkpoint.thread", sw_get_current_output_id() );
-
     result = NULL;
 
     /* Create values for the new task */
     thread_task_id = sw_generate_new_task_id( "thread" );
-    thread_output_id = sw_generate_output_id( thread_task_id, "cldthread" );
+    thread_output_id = sw_generate_output_id( (group_id != NULL ? group_id : thread_task_id), arg0, "cldthread" );
+
+    if(group_id != NULL){
+
+        cJSON *info = sw_query_info_for_output_id( thread_output_id );
+
+        if( info != NULL ){
+
+            cJSON *task, *task_id, *ref;
+
+            if( ((task = cJSON_GetObjectItem( info, "task" ))!=NULL) &&
+                ((task_id = cJSON_GetObjectItem( task, "task_id" ))!=NULL) &&
+                ((ref = cJSON_GetObjectItem( info, "ref" ))!=NULL) ){
+
+                result = _create_cldthread_object();
+                result->task_id = strdup( task_id->valuestring );
+                result->output_ref = sw_deserialize_ref( ref );
+                result->result = NULL;
+
+                free( thread_task_id );
+                free( thread_output_id );
+
+                return result;
+
+            }
+
+            cJSON_Delete(info);
+
+        }
+
+    }
+
+
+    asprintf( &path, "%s.checkpoint.thread", thread_task_id );
 
     if( _cldthread_task_checkpoint( thread_task_id, NULL, path, fptr, arg0 ) ){
 
@@ -68,7 +99,6 @@ cldthread *cldthread_create( void *(*fptr)(void *), void *arg0 ){
 
         if( sw_spawntask( thread_task_id,
                           thread_output_id,
-                          sw_get_master_loc(),
                           sw_get_current_task_id(),
                           "cldthread",
                           jsonenc_dpnds,
@@ -108,10 +138,10 @@ static int _cldthread_wait_on_outputs( const swref *output_refs[], size_t id_cou
     char *path;
     char *cont_task_id;
 
-    asprintf( &path, "%s.checkpoint.continuation", sw_get_current_task_id() );
-
     /* Create a task ID for the new continuation task */
     cont_task_id = sw_generate_new_task_id( "cont" );
+
+    asprintf( &path, "%s.checkpoint.continuation", sw_get_current_task_id() );
 
     result = _cldthread_task_checkpoint( cont_task_id, NULL, path, NULL, NULL );
 
@@ -155,7 +185,6 @@ static int _cldthread_wait_on_outputs( const swref *output_refs[], size_t id_cou
         /* Attempt to POST a new task to CIEL */
         result = sw_spawntask( cont_task_id,
                                sw_get_current_output_id(),
-                               sw_get_master_loc(),
                                sw_get_current_task_id(),
                                "cldthread",
                                jsonenc_dpnds,

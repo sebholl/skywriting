@@ -124,7 +124,7 @@ swref *sw_deserialize_ref( cJSON *json ){
                 result->loc_hints = calloc( result->loc_hints_size, sizeof( const char * ) );
 
                 for(i = 0; i < result->loc_hints_size; i++){
-                    result->loc_hints[i] = strdup(cJSON_GetArrayItem( ref, i )->valuestring);
+                    result->loc_hints[i] = strdup(cJSON_GetArrayItem( netlocs, i )->valuestring);
                 }
 
                 break;
@@ -140,7 +140,7 @@ swref *sw_deserialize_ref( cJSON *json ){
                 result->loc_hints = calloc( result->loc_hints_size, sizeof( const char * ) );
 
                 for(i = 0; i < result->loc_hints_size; i++){
-                    result->loc_hints[i] = strdup(cJSON_GetArrayItem( ref, i )->valuestring);
+                    result->loc_hints[i] = strdup(cJSON_GetArrayItem( netlocs, i )->valuestring);
                 }
 
                 break;

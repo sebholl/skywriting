@@ -13,11 +13,12 @@ int sw_init( void );
 
 int sw_spawntask( const char *new_task_id,
                   const char *output_task_id,
-                  const char *master_loc,
                   const char *parent_task_id,
                   const char *handler,
                   cJSON *jsonenc_dependencies,
                   int const is_continuation );
+
+cJSON *sw_query_info_for_output_id( const char *output_id );
 
 int sw_abort_task( const char *master_url, const char *task_id );
 
@@ -57,7 +58,7 @@ int sw_set_current_task_id( const char *taskid );
 
 char *sw_generate_new_task_id( const char *task_type );
 
-char *sw_generate_output_id( const char *task_id, const char *handler );
+char *sw_generate_output_id( const char *task_id, const void* unique_id, const char *handler );
 
 cJSON *sw_create_json_task_descriptor( const char *new_task_id,
                                        const char *output_task_id,

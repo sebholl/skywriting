@@ -48,7 +48,7 @@ static char *_sw_generate_temp_path( const char *id ){
 
     tmp = _sha1_hex_digest_from_bytes( tmp, len, 1 );
 
-    asprintf( &result, "/tmp/cldthead.%s", tmp );
+    asprintf( &result, "/tmp/cldthread.%s", tmp );
 
     free( tmp );
 

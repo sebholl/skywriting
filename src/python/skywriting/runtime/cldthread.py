@@ -73,9 +73,9 @@ class CloudThreadTaskExecutionRecord:
         except MissingInputException as mie:
             cherrypy.log.error('Missing input during CloudThread task execution', 'CloudThread', logging.ERROR, True)
             self.task_executor.master_proxy.failed_task(self.task_id, 'MISSING_INPUT', bindings=mie.bindings)
-        except:
+        except Exception as e:
             cherrypy.log.error('Error during executor task execution', 'CloudThread', logging.ERROR, True)
-            self.task_executor.master_proxy.failed_task(self.task_id, 'RUNTIME_EXCEPTION')
+            self.task_executor.master_proxy.failed_task(self.task_id, str(e))
 
 class _CloudProcessCommonExecutor(SWExecutor):
 
@@ -191,14 +191,12 @@ class CloudThreadExecutor(_CloudProcessCommonExecutor):
         os.mkfifo(filename)
         fifo = open(filename, 'w')
         
-        cherrypy.log.error("Writing to named pipe: %s" % filename, "CloudThreadExecutor", logging.INFO)
+#        cherrypy.log.error("Writing to named pipe: %s" % filename, "CloudThreadExecutor", logging.INFO)
         
         for name, value in self.env.items():
             fifo.write("%s\n%s\n" % (name, value) );
-            
         
-        
-        cherrypy.log.error("Closing named pipe: %s" % filename, "CloudThreadExecutor", logging.INFO)
+#        cherrypy.log.error("Closing named pipe: %s" % filename, "CloudThreadExecutor", logging.INFO)
         
         fifo.close()
         

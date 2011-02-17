@@ -159,7 +159,7 @@ cldvalue *cldvalue_deserialize( cJSON *json ){
 
             default:
 
-                result->value.data = (void *)cJSON_GetObjectItem(json,"value")->valueint;
+                result->value.data = (void *)(int)cJSON_GetObjectItem(json,"value")->valueint;
                 break;
 
         }
