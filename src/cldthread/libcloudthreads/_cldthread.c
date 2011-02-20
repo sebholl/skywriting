@@ -55,9 +55,15 @@ static void _cldthread_update_env( void ){
 
 static void _cldthread_submit_output( cldvalue *value, void *output ){
 
-    cJSON *json = cldvalue_serialize( value, output );
+    swref* ref = swref_create( DATA, sw_get_current_output_id(), value, 0, NULL );
+
+    cJSON *json = swref_serialize( ref );
+
     char *tmp = cJSON_PrintUnformatted( json );
+
     cJSON_Delete( json );
+
+    swref_free( ref );
 
     sw_save_string_to_store( NULL, sw_get_current_output_id(), tmp );
 

@@ -48,7 +48,7 @@ cldthread *cldthread_smart_create( void *(*fptr)(void *), void *arg0, char *grou
 
                 result = _create_cldthread_object();
                 result->task_id = strdup( task_id->valuestring );
-                result->output_ref = sw_deserialize_ref( ref );
+                result->output_ref = swref_deserialize( ref );
                 result->result = NULL;
 
                 free( thread_task_id );
@@ -82,8 +82,8 @@ cldthread *cldthread_smart_create( void *(*fptr)(void *), void *arg0, char *grou
 
         chkpt_ref = sw_move_file_to_store( NULL, path, NULL );
 
-        cJSON_AddItemToObject( jsonenc_args, "checkpoint", sw_serialize_ref( chkpt_ref ) );
-        sw_free_ref( chkpt_ref );
+        cJSON_AddItemToObject( jsonenc_args, "checkpoint", swref_serialize( chkpt_ref ) );
+        swref_free( chkpt_ref );
 
         tmp = cJSON_PrintUnformatted( jsonenc_args );
         cJSON_Delete( jsonenc_args );
@@ -94,8 +94,8 @@ cldthread *cldthread_smart_create( void *(*fptr)(void *), void *arg0, char *grou
         /* Then create the task */
 
         jsonenc_dpnds = cJSON_CreateObject();
-        cJSON_AddItemToObject( jsonenc_dpnds, "_args", sw_serialize_ref( args_ref ) );
-        sw_free_ref( args_ref );
+        cJSON_AddItemToObject( jsonenc_dpnds, "_args", swref_serialize( args_ref ) );
+        swref_free( args_ref );
 
         if( sw_spawntask( thread_task_id,
                           thread_output_id,
@@ -106,7 +106,7 @@ cldthread *cldthread_smart_create( void *(*fptr)(void *), void *arg0, char *grou
 
             result = _create_cldthread_object();
             result->task_id = thread_task_id;
-            result->output_ref = sw_create_ref( FUTURE, thread_output_id, 0, sw_get_current_worker_loc() );
+            result->output_ref = swref_create( FUTURE, thread_output_id, NULL, 0, sw_get_current_worker_loc() );
             result->result = NULL;
 
         };
@@ -160,8 +160,8 @@ static int _cldthread_wait_on_outputs( const swref *output_refs[], size_t id_cou
         jsonenc_args = cJSON_CreateObject();
 
         chkpt_ref = sw_move_file_to_store( NULL, path, NULL );
-        cJSON_AddItemToObject( jsonenc_args, "checkpoint", sw_serialize_ref( chkpt_ref ) );
-        sw_free_ref( chkpt_ref );
+        cJSON_AddItemToObject( jsonenc_args, "checkpoint", swref_serialize( chkpt_ref ) );
+        swref_free( chkpt_ref );
 
         tmp = cJSON_PrintUnformatted( jsonenc_args );
         cJSON_Delete( jsonenc_args );
@@ -172,12 +172,12 @@ static int _cldthread_wait_on_outputs( const swref *output_refs[], size_t id_cou
 
         jsonenc_dpnds = cJSON_CreateObject();
 
-        cJSON_AddItemToObject( jsonenc_dpnds, "_args", sw_serialize_ref( args_ref ) );
-        sw_free_ref( args_ref );
+        cJSON_AddItemToObject( jsonenc_dpnds, "_args", swref_serialize( args_ref ) );
+        swref_free( args_ref );
 
         for(i = 0; i < id_count; i++ ){
             asprintf( &tmp, "thread%d_output", i );
-            cJSON_AddItemToObject( jsonenc_dpnds, tmp, sw_serialize_ref( output_refs[i] ) );
+            cJSON_AddItemToObject( jsonenc_dpnds, tmp, swref_serialize( output_refs[i] ) );
             free(tmp);
         }
 
@@ -233,9 +233,36 @@ int cldthread_joins( cldthread *thread[], size_t const thread_count ){
     result = _cldthread_wait_on_outputs( output_refs, thread_count );
 
     for( i = 0; i < thread_count; i++ ){
+
         json = sw_get_json_from_store( output_refs[i] );
-        thread[i]->result = cldvalue_deserialize( json );
-        cJSON_Delete( json );
+
+        if(json != NULL){
+
+            swref *ref = swref_deserialize( json );
+
+            if(ref!=NULL){
+
+                switch(ref->type){
+
+                    case CONCRETE:
+                        if(ref->value==NULL) ref->value = cldvalue_from_json( json );
+                        break;
+
+                    default:
+                        break;
+
+                }
+
+                thread[i]->result = (cldvalue *)ref->value;
+
+                swref_free( ref );
+
+            }
+
+            cJSON_Delete( json );
+
+        }
+
     }
 
     free(output_refs);
@@ -253,7 +280,7 @@ void *cldthread_exit( cldvalue *result ){
 void cldthread_free( cldthread *const thread ){
 
     if(thread->task_id!=NULL) free(thread->task_id);
-    if(thread->output_ref!=NULL) sw_free_ref((void *)thread->output_ref);
+    if(thread->output_ref!=NULL) swref_free((void *)thread->output_ref);
     if(thread->result!=NULL) cldvalue_free(thread->result);
 
     free(thread);

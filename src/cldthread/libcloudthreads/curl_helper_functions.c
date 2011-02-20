@@ -44,4 +44,3 @@ size_t ReadMemoryCallback(void *ptr, size_t size, size_t nmemb, void *data){
     return bytecount;
 
 }
-

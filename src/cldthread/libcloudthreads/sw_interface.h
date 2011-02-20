@@ -25,7 +25,7 @@ int sw_abort_task( const char *master_url, const char *task_id );
 
 /* Block-store access */
 
-char *sw_get_data_from_store( const swref *ref, size_t *size_out );
+char *sw_dereference( const swref *ref, size_t *size_out );
 
 cJSON *sw_get_json_from_store( const swref *ref );
 

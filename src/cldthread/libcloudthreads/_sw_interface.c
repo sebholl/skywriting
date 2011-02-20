@@ -1,4 +1,8 @@
 #include <openssl/sha.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <pthread.h>
+
 
 static char *_sha1_hex_digest_from_bytes( const char *bytes, unsigned int len, int shouldFreeInput ){
 
@@ -107,7 +111,7 @@ static swref *_sw_post_data_to_worker( const char *worker_loc, const char *id, c
 
     if( result==CURLE_OK ){
 
-        return sw_create_ref( CONCRETE, id, size, worker_loc );
+        return swref_create( CONCRETE, id, NULL, size, worker_loc );
 
     } else {
 
@@ -159,22 +163,20 @@ static swref *_sw_write_block_store( const char *id, const void *data, size_t si
 
     }
 
-    return (proceed ? sw_create_ref( CONCRETE, id, size, sw_get_current_worker_loc() ) : NULL );
+    return (proceed ? swref_create( CONCRETE, id, NULL, size, sw_get_current_worker_loc() ) : NULL );
 
 }
 
 
 static char *_sw_get_data_through_http( const swref *ref, size_t *size_out ){
 
-    char *url;
-
     CURLcode result;
-    CURL *handle;
-
-    struct MemoryStruct data = { NULL, 0, 0 };
 
     size_t i;
+    CURL *handle;
     const char *loc_hint;
+
+    struct MemoryStruct data = { NULL, 0, 0 };
 
     handle = curl_easy_init();
 
@@ -187,7 +189,9 @@ static char *_sw_get_data_through_http( const swref *ref, size_t *size_out ){
     curl_easy_setopt( handle, CURLOPT_WRITEFUNCTION, &WriteMemoryCallback );
     curl_easy_setopt( handle, CURLOPT_WRITEDATA, &data );
 
-    for( loc_hint = ref->loc_hints[0]; loc_hint != NULL; loc_hint = ref->loc_hints[++i] ){
+    for( loc_hint = ref->loc_hints[0]; (loc_hint != NULL) && (i < ref->loc_hints_size); loc_hint = ref->loc_hints[++i] ){
+
+        char *url;
 
         asprintf( &url, "http://%s/data/%s/", loc_hint, ref->ref_id );
 
@@ -227,12 +231,83 @@ static char *_sw_get_data_through_http( const swref *ref, size_t *size_out ){
 
 }
 
+static void *_sw_stream_data_through_http( void *args ){
+
+    int result = 0;
+
+    const swref *ref = (const swref *)((void **)args)[0];
+    const int fd = (int)((void **)args)[1];
+
+    FILE* fp = fdopen( fd, "a" );
+
+    if( fp >= 0 ){
+
+        CURL *handle;
+        char *url;
+
+        const char *loc_hint;
+
+        size_t i;
+
+        handle = curl_easy_init();
+
+        curl_easy_setopt( handle, CURLOPT_FAILONERROR, 1 );
+
+        #if VERBOSE
+        curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
+        #endif
+
+        curl_easy_setopt( handle, CURLOPT_WRITEDATA, fp );
+
+        for( loc_hint = ref->loc_hints[0]; (loc_hint != NULL) && (i < ref->loc_hints_size); loc_hint = ref->loc_hints[++i] ){
+
+            asprintf( &url, "http://%s/data/%s/", loc_hint, ref->ref_id );
+
+            #if VERBOSE
+            printf("Retrieving data from \"%s\".\n", url );
+            #endif
+
+            curl_easy_setopt( handle, CURLOPT_URL, url );
+            free( url );
+
+            if( curl_easy_perform( handle ) != CURLE_OK ) continue;
+
+            result = 1;
+
+            break;
+
+        }
+
+        curl_easy_cleanup( handle );
+
+        fclose(fp);
+
+    }
+
+    return (void *)result;
+
+}
+
+static int _sw_async_stream_data_through_http( const swref *ref, const char *fifo_path ){
+
+    pthread_t pthread;
+    void *args[2];
+
+    args[0] = (void *)ref;
+    args[1] = (void *)open( fifo_path, O_WRONLY | O_CREAT | O_APPEND );
+
+    return (pthread_create(&pthread, NULL, _sw_stream_data_through_http, args) == 0);
+
+}
+
+
+
 
 static swref *_sw_post_file_to_worker( const char *worker_loc, const char *filepath ){
 
     char *post_url;
     char *id;
-    FILE *fd;
+    FILE *fp;
 
     CURLcode result;
     CURL *handle;
@@ -241,9 +316,9 @@ static swref *_sw_post_file_to_worker( const char *worker_loc, const char *filep
 
     struct curl_slist *chunk;
 
-    fd = fopen( filepath, "rb" );
+    fp = fopen( filepath, "rb" );
 
-    if( fd == NULL ){
+    if( fp == NULL ){
         perror("sw_post_file_to_worker(): cannot open file for binary reading");
         return NULL;
     }
@@ -260,8 +335,8 @@ static swref *_sw_post_file_to_worker( const char *worker_loc, const char *filep
 
     struct stat buf;
 
-    if( fstat( fileno(fd), &buf )==-1 ){
-        fclose(fd);
+    if( fstat( fileno(fp), &buf )==-1 ){
+        fclose(fp);
         perror("sw_post_file_to_worker(): Error retrieving file properties");
         return NULL;
     }
@@ -279,7 +354,7 @@ static swref *_sw_post_file_to_worker( const char *worker_loc, const char *filep
     curl_easy_setopt( handle, CURLOPT_URL, post_url );
     free( post_url );
 
-    curl_easy_setopt( handle, CURLOPT_READDATA, fd );
+    curl_easy_setopt( handle, CURLOPT_READDATA, fp );
 
     chunk = NULL;
     chunk = curl_slist_append( chunk, "Content-Type: identity" );
@@ -290,7 +365,7 @@ static swref *_sw_post_file_to_worker( const char *worker_loc, const char *filep
     curl_easy_cleanup( handle );
     curl_slist_free_all( chunk );
 
-    fclose( fd );
+    fclose( fp );
 
     if(result!=CURLE_OK){
 
@@ -300,14 +375,9 @@ static swref *_sw_post_file_to_worker( const char *worker_loc, const char *filep
 
     }
 
-    ref = sw_create_ref( CONCRETE, id, buf.st_size, worker_loc );
+    ref = swref_create( CONCRETE, id, NULL, buf.st_size, worker_loc );
     free( id );
 
     return ref;
 
 }
-
-
-
-
-

@@ -156,7 +156,7 @@
 
 1297892384 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/blcr_interface.h
 
-1297798093 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/cJSON.c
+1297977338 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/cJSON.c
 	<string.h>
 	<stdio.h>
 	<math.h>
@@ -164,11 +164,13 @@
 	<float.h>
 	<limits.h>
 	<ctype.h>
+	<inttypes.h>
 	"cJSON.h"
 
-1259168607 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/cJSON.h
+1297977441 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/cJSON.h
+	<stdint.h>
 
-1297914266 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/cldthread.c
+1298218827 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/cldthread.c
 	<stdio.h>
 	<stdlib.h>
 	<string.h>
@@ -180,29 +182,32 @@
 	"swref.h"
 	"cldvalue.h"
 
-1297654535 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/swref.h
+1298219033 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/swref.h
 	<stdint.h>
+	"cldvalue.h"
 	"cJSON.h"
 
-1297875693 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/cldvalue.h
+1298221595 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/cldvalue.h
 	"cJSON.h"
 	<inttypes.h>
 
-1297878482 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/_cldthread.c
+1298218755 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/_cldthread.c
 	"blcr_interface.h"
 	"sw_interface.h"
 
-1297913491 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/sw_interface.h
+1298221744 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/sw_interface.h
 	"swref.h"
 
-1297891947 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/cldvalue.c
+1298226328 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/cldvalue.c
 	<stdio.h>
 	<stdlib.h>
 	<string.h>
+	<float.h>
+	<math.h>
 	"cldvalue.h"
 	"sw_interface.h"
 
-1294814039 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/curl_helper_functions.c
+1298226149 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/curl_helper_functions.c
 	<stdio.h>
 	<stdlib.h>
 	<string.h>
@@ -226,9 +231,11 @@
 1297910781 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/_sw_interface.c
 	<openssl/sha.h>
 
-1297863750 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/swref.c
+1298218827 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/swref.c
 	<stdlib.h>
 	<string.h>
+	<stdio.h>
+	"sw_interface.h"
 	"swref.h"
 
 1297704122 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/tests/helloworld.c
@@ -248,9 +255,10 @@
 
 1297891273 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/tests/pi_halton.c
 
-1297909504 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/tests/fib.c
+1298217842 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/tests/fib.c
 	<stdio.h>
 	<stdlib.h>
+	<stdint.h>
 	<unistd.h>
 	<string.h>
 	"../sw_interface.h"

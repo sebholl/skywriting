@@ -24,15 +24,14 @@ cldvalue *cldvalue_real( long double dbl );
 cldvalue *cldvalue_string( const char *str );
 cldvalue *cldvalue_data( void *data, size_t size );
 
-inline intmax_t cldvalue_to_intmax( const cldvalue *obj );
-inline long cldvalue_to_long( const cldvalue *obj );
-inline int cldvalue_to_int( const cldvalue *obj );
-inline double cldvalue_to_double( const cldvalue *obj );
-inline float cldvalue_to_float( const cldvalue *obj );
-inline const char *cldvalue_to_string( const cldvalue *obj );
-inline void *cldvalue_to_data( const cldvalue *obj, size_t *size );
+intmax_t cldvalue_to_intmax( const cldvalue *obj );
+long cldvalue_to_long( const cldvalue *obj );
+int cldvalue_to_int( const cldvalue *obj );
+double cldvalue_to_double( const cldvalue *obj );
+float cldvalue_to_float( const cldvalue *obj );
+const char *cldvalue_to_string( const cldvalue *obj );
+void *cldvalue_to_data( const cldvalue *obj, size_t *size );
 
-cJSON *cldvalue_serialize( cldvalue *obj, void *default_value );
-cldvalue *cldvalue_deserialize( cJSON *json );
+cldvalue *cldvalue_from_json( cJSON *json );
 
 void cldvalue_free( cldvalue *obj );

@@ -163,42 +163,101 @@ int sw_abort_task( const char *master_loc, const char *task_id ){
 }
 
 
-char *sw_get_data_from_store( const swref *ref, size_t *size_out ){
+char *sw_dereference( const swref *ref, size_t *size_out ){
 
+    char *result = NULL;
     char* path = _sw_generate_block_store_path( ref->ref_id );
-    FILE* fd = fopen( path, "rb" );
+    FILE* fp = fopen( path, "rb" );
 
-    if( fd != NULL ){
+    #if VERBOSE
+    printf("Attempting to dereference swref* object (%p)\n", ref );
+    #endif
+
+    if( fp != NULL ){
 
         long pos;
         char *bytes;
 
-        fseek(fd, 0, SEEK_END);
-        pos = ftell(fd);
-        fseek(fd, 0, SEEK_SET);
+        fseek(fp, 0, SEEK_END);
+        pos = ftell(fp);
+        fseek(fp, 0, SEEK_SET);
 
-        bytes = malloc(pos);
-        fread(bytes, pos, 1, fd);
-        fclose(fd);
+        if( (bytes = malloc(pos)) ){;
 
-        free( path );
+            if(fread(bytes, pos, 1, fp)==1){
 
-        if( size_out != NULL) *size_out = (size_t)pos;
-        return bytes;
+                #if VERBOSE
+                printf("--> Read %ld bytes directly from block store file\n", pos );
+                #endif
+
+                result = bytes;
+
+                if( size_out != NULL) *size_out = (size_t)pos;
+
+            } else {
+
+                #if VERBOSE
+                printf("--> Fail when attempting to read %ld bytes from block store\n", pos );
+                printf("    %s\n", path );
+                #endif
+
+                free( bytes );
+
+            }
+
+        }
+
+        fclose(fp);
 
     }
 
     free( path );
 
-    return _sw_get_data_through_http( ref, size_out );
+    if( result == NULL ){
+
+        #if VERBOSE
+        printf("--> Attempting to retrieve over HTTP\n" );
+        #endif
+        result = _sw_get_data_through_http( ref, size_out );
+
+    }
+
+    #if VERBOSE
+    printf("::: Result is: %p\n", result );
+    #endif
+
+    return result;
 
 }
+
+int sw_stream_reference( const swref *ref ){
+
+    char* path = _sw_generate_block_store_path( ref->ref_id );
+    int result = open( path, O_RDONLY | O_NONBLOCK );
+
+    if( result < 0 ){
+
+        /* We get libCurl to stream to our path in a separate *system* thread */
+        if( mkfifo( path, S_IRUSR | S_IWUSR ) && _sw_async_stream_data_through_http( ref, path ) ){
+
+            result = open( path, O_RDONLY );
+
+        }
+
+    }
+
+    free( path );
+
+    return result;
+
+}
+
 
 cJSON *sw_get_json_from_store( const swref *ref ){
 
     cJSON *result = NULL;
 
-    char *str = sw_get_data_from_store( ref, NULL );
+    char *str = sw_dereference( ref, NULL );
 
     if( str != NULL ){
 
@@ -229,7 +288,7 @@ swref *sw_move_file_to_store( const char *worker_url, const char *filepath, cons
 
         if(_sw_move_to_block_store( filepath, _id )){
 
-            result = sw_create_ref( CONCRETE, _id, buf.st_size, sw_get_current_worker_loc() );
+            result = swref_create( CONCRETE, _id, NULL, buf.st_size, sw_get_current_worker_loc() );
 
         }
 
@@ -262,7 +321,7 @@ swref *sw_save_data_to_store( const char *worker_loc, const char *id, const void
 
         if( _sw_write_block_store( _id, data, size ) ) {
 
-            result = sw_create_ref( CONCRETE, _id, size, sw_get_current_worker_loc() );
+            result = swref_create( CONCRETE, _id, NULL, size, sw_get_current_worker_loc() );
 
         } else {
 
@@ -274,7 +333,7 @@ swref *sw_save_data_to_store( const char *worker_loc, const char *id, const void
 
         if( _sw_post_data_to_worker( worker_loc, _id, data, size ) ) {
 
-            result = sw_create_ref( CONCRETE, _id, size, worker_loc );
+            result = swref_create( CONCRETE, _id, NULL, size, worker_loc );
 
         }
 

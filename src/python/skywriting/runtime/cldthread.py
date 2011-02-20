@@ -180,27 +180,26 @@ class CloudThreadExecutor(_CloudProcessCommonExecutor):
             raise BlameUserException('Incorrect arguments to the CloudThread executor: %s' % repr(self.args))
 
     def before_execute(self, block_store):
-        cherrypy.log.error("Running CloudThread executor for checkpoint: %s" % self.checkpoint_ref, "CloudThreadExecutor", logging.INFO)
         self.checkpoint_filenames = self.get_filenames_eager(block_store, [self.checkpoint_ref])
         
+        self.comm_fifo_path = os.path.join('/tmp/', self.task_id)
+        os.mkfifo(self.comm_fifo_path)
+        
     def process_manage(self, proc):
-        filename = os.path.join('/tmp/', self.task_id)
         
-        cherrypy.log.error("Opening named pipe: %s" % filename, "CloudThreadExecutor", logging.INFO)
+        cherrypy.log.error("Opening named pipe: %s" % self.comm_fifo_path, "CloudThreadExecutor", logging.INFO)
+        fifo = open(self.comm_fifo_path, 'w')
         
-        os.mkfifo(filename)
-        fifo = open(filename, 'w')
-        
-#        cherrypy.log.error("Writing to named pipe: %s" % filename, "CloudThreadExecutor", logging.INFO)
+        #cherrypy.log.error("Writing to named pipe: %s" % self.comm_fifo_path, "CloudThreadExecutor", logging.INFO)
         
         for name, value in self.env.items():
             fifo.write("%s\n%s\n" % (name, value) );
         
-#        cherrypy.log.error("Closing named pipe: %s" % filename, "CloudThreadExecutor", logging.INFO)
+        #cherrypy.log.error("Closing named pipe: %s" % self.comm_fifo_path, "CloudThreadExecutor", logging.INFO)
         
         fifo.close()
         
-        cherrypy.log.error("Closed named pipe: %s" % filename, "CloudThreadExecutor", logging.INFO)
+        cherrypy.log.error("Closed named pipe: %s" % self.comm_fifo_path, "CloudThreadExecutor", logging.INFO)
 
     def get_process_args(self):
         cherrypy.log.error("CloudThreadExecutor checkpoint path : %s" % self.checkpoint_filenames, "CloudThreadExecutor", logging.INFO)

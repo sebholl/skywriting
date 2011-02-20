@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include "cldvalue.h"
 #include "cJSON.h"
 
 static const char * const swref_map_type_tuple_id[] = { "err",
@@ -10,7 +11,8 @@ static const char * const swref_map_type_tuple_id[] = { "err",
                                           "t2",
                                           "fetch2",
                                           "urls",
-                                          "val" };
+                                          "val",
+                                          "" };
 
 typedef struct swref {
 
@@ -30,12 +32,13 @@ typedef struct swref {
     uintmax_t size;
     const char **loc_hints;
     uintmax_t loc_hints_size;
+    const cldvalue *value;
 
 } swref;
 
-swref *sw_create_ref( enum swref_type type, const char *ref_id, uintmax_t size, const char *loc_hint );
-void sw_fatal_merge_ref( swref *receiver, swref *sender );
-void sw_free_ref( swref *ref );
+swref *swref_create( enum swref_type type, const char *ref_id, const cldvalue *value, uintmax_t size, const char *loc_hint );
+void swref_fatal_merge( swref *receiver, swref *sender );
+void swref_free( swref *ref );
 
-cJSON *sw_serialize_ref( const swref *ref );
-swref *sw_deserialize_ref( cJSON* json );
+cJSON *swref_serialize( const swref *ref );
+swref *swref_deserialize( cJSON* json );

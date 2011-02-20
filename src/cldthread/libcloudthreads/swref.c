@@ -1,43 +1,58 @@
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
+#include "sw_interface.h"
 #include "swref.h"
 
-swref *sw_create_ref( enum swref_type type, const char *ref_id, uintmax_t size, const char *loc_hint ){
+swref *swref_create( enum swref_type type, const char *ref_id, const cldvalue *value, uintmax_t size, const char *loc_hint ){
 
     swref *result = calloc( 1, sizeof(swref) );
-    result->loc_hints = calloc( 2, sizeof(char *) );
 
     result->type = type;
     result->ref_id = strdup(ref_id);
     result->size = size;
-    result->loc_hints[0] = strdup(loc_hint);
-    result->loc_hints_size = 1;
+
+    if( loc_hint != NULL ){
+        result->loc_hints = calloc( 2, sizeof(char *) );
+        result->loc_hints[0] = strdup(loc_hint);
+        result->loc_hints_size = 1;
+    } else {
+        result->loc_hints_size = 0;
+    }
+
+    result->value = value;
 
     return result;
 
 }
 
-void sw_fatal_merge_ref( swref *const receiver, swref *const sender ){
+void swref_fatal_merge( swref *const receiver, swref *const sender ){
 
     receiver->type = sender->type;
     receiver->size = sender->size;
     receiver->loc_hints = sender->loc_hints;
+    receiver->loc_hints_size = sender->loc_hints_size;
 
     free( (char *)sender->ref_id );
     free( sender );
 
 }
 
-void sw_free_ref( swref *ref ){
+void swref_free( swref *ref ){
 
     if(ref!=NULL){
 
-        int i = 0;
+        if(ref->loc_hints != NULL){
+            int i = 0;
 
-        const char *hint;
-        for( hint = ref->loc_hints[i]; hint != NULL; hint = ref->loc_hints[++i] ){
-            free((char *)hint);
+            const char *hint;
+            for( hint = ref->loc_hints[i]; (hint != NULL) && (i < ref->loc_hints_size); hint = ref->loc_hints[++i] ){
+                free((char *)hint);
+            }
+
+            free(ref->loc_hints);
+
         }
 
         free((char *)ref->ref_id);
@@ -47,38 +62,70 @@ void sw_free_ref( swref *ref ){
 
 }
 
-cJSON *sw_serialize_ref( const swref * const ref ){
+cJSON *swref_serialize( const swref * const ref ){
 
     cJSON *result = NULL;
 
     if( ref != NULL ){
 
-        cJSON *array;
+        cJSON *array = cJSON_CreateArray();
 
-        result = cJSON_CreateObject();
-
-        array = cJSON_CreateArray();
+        cJSON_AddItemToArray( array, cJSON_CreateString(swref_map_type_tuple_id[ref->type]) );
+        cJSON_AddItemToArray( array, cJSON_CreateString(ref->ref_id) );
 
         switch( ref->type ){
             case FUTURE:
-                cJSON_AddItemToArray( array, cJSON_CreateString(swref_map_type_tuple_id[ref->type]) );
-                cJSON_AddItemToArray( array, cJSON_CreateString(ref->ref_id) );
                 break;
             case STREAMING:
-                cJSON_AddItemToArray( array, cJSON_CreateString(swref_map_type_tuple_id[ref->type]) );
-                cJSON_AddItemToArray( array, cJSON_CreateString(ref->ref_id) );
                 cJSON_AddItemToArray( array, cJSON_CreateStringArray( ref->loc_hints, ref->loc_hints_size ) );
+                break;
+            case DATA:
+            {
+                const cldvalue* val = ref->value;
+                if(val!=NULL){
+
+                    switch(val->type){
+                        case INTEGER:
+                            cJSON_AddItemToArray( array, cJSON_CreateNumber( val->value.integer ) );
+                            break;
+                        case REAL:
+                            cJSON_AddItemToArray( array, cJSON_CreateNumber( val->value.real ) );
+                            break;
+                        case STRING:
+                            cJSON_AddItemToArray( array, cJSON_CreateString( val->value.string ) );
+                            break;
+                        case BINARY:
+                        {
+                            swref *ref = sw_save_data_to_store( NULL, NULL, val->value.data, val->size );
+                            result = swref_serialize( ref );
+                            swref_free(ref);
+                        }
+                            break;
+                        default:
+                            cJSON_AddItemToArray( array, cJSON_CreateNull() );
+                            break;
+                    }
+
+                }
+            }
                 break;
             case CONCRETE:
             default:
-                cJSON_AddItemToArray( array, cJSON_CreateString(swref_map_type_tuple_id[ref->type]) );
-                cJSON_AddItemToArray( array, cJSON_CreateString(ref->ref_id) );
                 cJSON_AddItemToArray( array, cJSON_CreateNumber(ref->size) );
                 cJSON_AddItemToArray( array, cJSON_CreateStringArray( ref->loc_hints, ref->loc_hints_size ) );
                 break;
         }
 
-        cJSON_AddItemToObject( result, "__ref__", array );
+        if(result==NULL){
+
+            result = cJSON_CreateObject();
+            cJSON_AddItemToObject( result, "__ref__", array );
+
+        } else {
+
+            cJSON_Delete( array );
+
+        }
 
     }
 
@@ -86,7 +133,7 @@ cJSON *sw_serialize_ref( const swref * const ref ){
 
 }
 
-swref *sw_deserialize_ref( cJSON *json ){
+swref *swref_deserialize( cJSON *json ){
 
     cJSON *ref;
     swref *result = NULL;
@@ -110,15 +157,14 @@ swref *sw_deserialize_ref( cJSON *json ){
             }
         }
 
+        result->ref_id = strdup(cJSON_GetArrayItem( ref, 1 )->valuestring);
+
         switch(result->type){
 
             case FUTURE:
-                result->ref_id = strdup(cJSON_GetArrayItem( ref, 1 )->valuestring);
                 break;
 
             case STREAMING:
-                result->ref_id = strdup(cJSON_GetArrayItem( ref, 1 )->valuestring);
-
                 netlocs = cJSON_GetArrayItem( ref, 2 );
                 result->loc_hints_size = cJSON_GetArraySize( netlocs );
                 result->loc_hints = calloc( result->loc_hints_size, sizeof( const char * ) );
@@ -129,10 +175,12 @@ swref *sw_deserialize_ref( cJSON *json ){
 
                 break;
 
+            case DATA:
+                result->value = cldvalue_from_json( cJSON_GetArrayItem( ref, 2 ) );
+                break;
+
             case CONCRETE:
             default:
-
-                result->ref_id = strdup(cJSON_GetArrayItem( ref, 1 )->valuestring);
                 result->size = cJSON_GetArrayItem( ref, 2 )->valueint;
 
                 netlocs = cJSON_GetArrayItem( ref, 3 );
