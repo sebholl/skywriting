@@ -18,16 +18,12 @@ int sw_spawntask( const char *new_task_id,
                   cJSON *jsonenc_dependencies,
                   int const is_continuation );
 
-cJSON *sw_query_info_for_output_id( const char *output_id );
+//cJSON *sw_query_info_for_output_id( const char *output_id );
 
 int sw_abort_task( const char *master_url, const char *task_id );
 
 
 /* Block-store access */
-
-char *sw_dereference( const swref *ref, size_t *size_out );
-
-cJSON *sw_get_json_from_store( const swref *ref );
 
 swref *sw_save_data_to_store( const char *worker_loc, const char *id, const void *data, size_t size );
 
@@ -35,6 +31,9 @@ swref *sw_save_data_to_store( const char *worker_loc, const char *id, const void
 
 swref *sw_move_file_to_store( const char *worker_loc, const char *filepath, const char *id );
 
+char *sw_generate_block_store_path( const char *id );
+
+int sw_open_fd_for_ref( const char *id );
 
 /* Environment querying */
 
@@ -56,9 +55,11 @@ int sw_set_current_task_id( const char *taskid );
 
 /* Miscellaneous helper functions */
 
-char *sw_generate_new_task_id( const char *task_type );
+char *sw_generate_new_task_id( const char *handler, const char *group_id, const char* desc );
 
-char *sw_generate_output_id( const char *task_id, const void* unique_id, const char *handler );
+char *sw_generate_task_id( const char *handler, const char *group_id, const void* unique_id );
+
+char *sw_generate_output_id( const char *task_id );
 
 cJSON *sw_create_json_task_descriptor( const char *new_task_id,
                                        const char *output_task_id,

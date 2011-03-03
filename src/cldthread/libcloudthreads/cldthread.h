@@ -24,6 +24,13 @@ cldthread *cldthread_smart_create( void *(*fptr)(void *), void *arg0, char *grou
 #define cldthread_join( thread ) cldthread_joins( &thread, 1 )
 int cldthread_joins( cldthread *thread[], size_t thread_count );
 
+#define cldthread_dereference( ref ) cldthread_multi_dereference( &ref, 1 )
+size_t cldthread_multi_dereference( swref *ref[], size_t count );
+
+char *cldthread_dump_ref( const swref *ref, size_t *size_out );
+
+int cldthread_open_stream( swref *ref );
+void cldthread_close_stream( swref *ref );
 
 /* Returning values from cloud threads */
 

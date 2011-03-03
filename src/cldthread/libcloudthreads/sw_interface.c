@@ -94,6 +94,8 @@ int sw_spawntask( const char *new_task_id,
 
 }
 
+/* NON-DETERMINISTIC
+
 cJSON *sw_query_info_for_output_id( const char *output_id ){
 
     cJSON *result = NULL;
@@ -130,7 +132,7 @@ cJSON *sw_query_info_for_output_id( const char *output_id ){
     return result;
 
 }
-
+*/
 
 
 int sw_abort_task( const char *master_loc, const char *task_id ){
@@ -162,107 +164,53 @@ int sw_abort_task( const char *master_loc, const char *task_id ){
 
 }
 
+char *sw_generate_block_store_path( const char *id ){
 
-char *sw_dereference( const swref *ref, size_t *size_out ){
+    char *result;
 
-    char *result = NULL;
-    char* path = _sw_generate_block_store_path( ref->ref_id );
-    FILE* fp = fopen( path, "rb" );
+    int len;
+    const char *separator = "/";
+    const char *path = sw_get_block_store_path();
 
-    #if VERBOSE
-    printf("Attempting to dereference swref* object (%p)\n", ref );
-    #endif
+    len = strlen( path );
 
-    if( fp != NULL ){
+    if( (len > 0) && (path[len-1] == separator[0]) ) separator = "";
 
-        long pos;
-        char *bytes;
+    return (asprintf( &result, "%s%s%s", path, separator, id ) != -1) ? result : NULL;
 
-        fseek(fp, 0, SEEK_END);
-        pos = ftell(fp);
-        fseek(fp, 0, SEEK_SET);
+}
 
-        if( (bytes = malloc(pos)) ){;
+static char *_sw_get_filename( const char * const id ){
 
-            if(fread(bytes, pos, 1, fp)==1){
+    char *result, *envname;
 
-                #if VERBOSE
-                printf("--> Read %ld bytes directly from block store file\n", pos );
-                #endif
+    asprintf( &envname, "CL_PATH_%s", id );
+    result = getenv( envname );
+    free( envname );
 
-                result = bytes;
+    return ( result != NULL ) ? strdup( result ) : NULL;
 
-                if( size_out != NULL) *size_out = (size_t)pos;
+}
 
-            } else {
+int sw_open_fd_for_ref( const char *id ){
 
-                #if VERBOSE
-                printf("--> Fail when attempting to read %ld bytes from block store\n", pos );
-                printf("    %s\n", path );
-                #endif
+    int result = -1;
+    char *path = _sw_get_filename( id );
 
-                free( bytes );
-
-            }
-
-        }
-
-        fclose(fp);
-
-    }
-
-    free( path );
-
-    if( result == NULL ){
+    if(path != NULL){
 
         #if VERBOSE
-        printf("--> Attempting to retrieve over HTTP\n" );
+        printf( "Opening %s from path \"%s\".\n", id, path );
         #endif
-        result = _sw_get_data_through_http( ref, size_out );
 
-    }
+        result = open( path, O_RDONLY );
+        free( path );
 
-    #if VERBOSE
-    printf("::: Result is: %p\n", result );
-    #endif
+    } else {
 
-    return result;
-
-}
-
-int sw_stream_reference( const swref *ref ){
-
-    char* path = _sw_generate_block_store_path( ref->ref_id );
-    int result = open( path, O_RDONLY | O_NONBLOCK );
-
-    if( result < 0 ){
-
-        /* We get libCurl to stream to our path in a separate *system* thread */
-        if( mkfifo( path, S_IRUSR | S_IWUSR ) && _sw_async_stream_data_through_http( ref, path ) ){
-
-            result = open( path, O_RDONLY );
-
-        }
-
-    }
-
-    free( path );
-
-    return result;
-
-}
-
-
-cJSON *sw_get_json_from_store( const swref *ref ){
-
-    cJSON *result = NULL;
-
-    char *str = sw_dereference( ref, NULL );
-
-    if( str != NULL ){
-
-        result = cJSON_Parse( str );
-        free(str);
+        #if VERBOSE
+        printf( "No path value for ref \"%s\".\n", id );
+        #endif
 
     }
 
@@ -275,14 +223,14 @@ swref *sw_move_file_to_store( const char *worker_url, const char *filepath, cons
 
     swref *result = NULL;
 
-    char *_id = (id == NULL) ? sw_generate_new_task_id( "file" ) : (char *)id;
+    char *_id = (id == NULL) ? sw_generate_new_task_id( "cldthread", sw_get_current_task_id(), "file" ) : (char *)id;
 
     if( (worker_url == NULL) || ( strcasecmp( worker_url, sw_get_current_worker_loc() ) == 0) ){
 
         struct stat buf;
 
         if( stat( filepath, &buf )==-1 ){
-            perror("sw_move_file_to_worker(): Error retrieving file properties");
+            fprintf( stderr, "sw_move_file_to_worker(): Error retrieving file properties" );
             return NULL;
         }
 
@@ -314,7 +262,7 @@ swref *sw_save_data_to_store( const char *worker_loc, const char *id, const void
 
     swref *result = NULL;
 
-    char *_id = (id == NULL) ? sw_generate_new_task_id( "string" )
+    char *_id = (id == NULL) ? sw_generate_new_task_id( "cldthread", sw_get_current_task_id(), "string" )
                              : (char *)id;
 
     if( (worker_loc == NULL) || ( strcasecmp( worker_loc, sw_get_current_worker_loc() ) == 0) ){
@@ -325,7 +273,7 @@ swref *sw_save_data_to_store( const char *worker_loc, const char *id, const void
 
         } else {
 
-            printf( "sw_save_data_to_worker(): could not write data to block_store\n" );
+            fprintf( stderr, "sw_save_data_to_worker(): could not write data to block_store\n" );
 
         }
 
@@ -349,40 +297,42 @@ swref *sw_save_data_to_store( const char *worker_loc, const char *id, const void
 
 }
 
+char *sw_generate_new_task_id( const char *handler, const char *group_id, const char *desc ){
 
-char *sw_generate_new_task_id( const char *task_type ){
-
-    static int _spawn_count = 0;
-
-    char *str;
-    char *result;
-    int len;
-
-    len = asprintf( &str, "%s:%d", sw_get_current_task_id(), ++_spawn_count );
-
-    str = _sha1_hex_digest_from_bytes( str, len, 1 );
-
-    asprintf( &result, "%s:%s", str, task_type );
-
-    free( str );
-
-    return result;
-
-}
-
-char *sw_generate_output_id( const char *task_id, const void* const unique_id, const char *handler ){
+    static int _count = 0;
 
     char *str;
-    char *result;
     int len;
 
-    len = asprintf( &str, "%s:%s:%p", handler, task_id, unique_id );
+    len = asprintf( &str, "%s:%s:%d:%s", handler, group_id, ++_count, desc );
 
     //str = _sha1_hex_digest_from_bytes( str, len, 1 );
 
-    asprintf( &result, "%s:output", str );
+    return str;
 
-    free( str );
+}
+
+
+char *sw_generate_task_id( const char *handler, const char *group_id, const void* const unique_id ){
+
+    char *str;
+    int len;
+
+    len = asprintf( &str, "%s:%s:%p", handler, group_id, unique_id );
+
+    //str = _sha1_hex_digest_from_bytes( str, len, 1 );
+
+    return str;
+
+}
+
+
+
+char *sw_generate_output_id( const char *task_id ){
+
+    char *result;
+
+    asprintf( &result, "%s:output", task_id );
 
     return result;
 
@@ -390,32 +340,32 @@ char *sw_generate_output_id( const char *task_id, const void* const unique_id, c
 
 
 inline int sw_set_current_task_id( const char *taskid ){
-    return ( setenv( "SW_TASK_ID", taskid, 1 ) == 0 );
+    return ( setenv( "CL_TASK_ID", taskid, 1 ) == 0 );
 }
 
 inline const char* sw_get_current_task_id( void ){
-    char *value = (char*)getenv( "SW_TASK_ID" );
+    char *value = (char*)getenv( "CL_TASK_ID" );
     return (value != NULL ? value : "1234" );
 }
 
 inline const char* sw_get_current_worker_loc( void ){
-    char *value = (char*)getenv( "SW_WORKER_LOC" );
+    char *value = (char*)getenv( "CL_WORKER_LOC" );
     return (value != NULL ? value : "localhost:9001" );
 
 }
 
 inline const char* sw_get_current_output_id( void ){
-    char *value = (char*)getenv( "SW_OUTPUT_ID" );
+    char *value = (char*)getenv( "CL_OUTPUT_ID" );
     return (value != NULL ? value : "4321" );
 }
 
 inline const char* sw_get_master_loc( void ){
-    char *value = (char*)getenv( "SW_MASTER_LOC" );
+    char *value = (char*)getenv( "CL_MASTER_LOC" );
     return (value != NULL ? value : "localhost:9000" );
 }
 
 inline const char* sw_get_block_store_path( void ){
-    char *value = (char*)getenv( "SW_BLOCK_STORE" );
+    char *value = (char*)getenv( "CL_BLOCK_STORE" );
     return (value != NULL ? value : "storeW1" );
 }
 

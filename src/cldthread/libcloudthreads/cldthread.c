@@ -2,6 +2,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+
 #include "cJSON.h"
 
 #include "cldthread.h"
@@ -26,14 +30,27 @@ cldthread *cldthread_smart_create( void *(*fptr)(void *), void *arg0, char *grou
     char *thread_task_id;
     char *thread_output_id;
 
+    static int _spawn_count = 0;
+
     cldthread *result;
 
     result = NULL;
 
     /* Create values for the new task */
-    thread_task_id = sw_generate_new_task_id( "thread" );
-    thread_output_id = sw_generate_output_id( (group_id != NULL ? group_id : thread_task_id), arg0, "cldthread" );
 
+    if(group_id != NULL){
+
+        thread_task_id = sw_generate_task_id( "cldthread", group_id, arg0 );
+
+    } else {
+
+        thread_task_id = sw_generate_task_id( "cldthread", sw_get_current_task_id(), (void *)++_spawn_count );
+
+    }
+
+    thread_output_id = sw_generate_output_id( thread_task_id );
+
+    /*
     if(group_id != NULL){
 
         cJSON *info = sw_query_info_for_output_id( thread_output_id );
@@ -64,8 +81,8 @@ cldthread *cldthread_smart_create( void *(*fptr)(void *), void *arg0, char *grou
 
     }
 
-
-    asprintf( &path, "%s.checkpoint.thread", thread_task_id );
+    */
+    asprintf( &path, "/tmp/%s.%s.checkpoint.thread", sw_get_current_task_id(), thread_task_id );
 
     if( _cldthread_task_checkpoint( thread_task_id, NULL, path, fptr, arg0 ) ){
 
@@ -131,110 +148,50 @@ cldthread *cldthread_smart_create( void *(*fptr)(void *), void *arg0, char *grou
 
 }
 
-static int _cldthread_wait_on_outputs( const swref *output_refs[], size_t id_count ){
 
-    int result;
+int cldthread_open_stream( swref *ref ){
 
-    char *path;
-    char *cont_task_id;
+    if( (ref->fd) < 0 ){
 
-    /* Create a task ID for the new continuation task */
-    cont_task_id = sw_generate_new_task_id( "cont" );
+        ref->fd = sw_open_fd_for_ref( ref->ref_id );
 
-    asprintf( &path, "%s.checkpoint.continuation", sw_get_current_task_id() );
+        /*
+        if( (ref->fd) < 0 ){
 
-    result = _cldthread_task_checkpoint( cont_task_id, NULL, path, NULL, NULL );
+            _cldthread_continuation_for_inputs( &ref, 1 );
+            ref->fd = sw_open_fd_for_ref( ref->ref_id );
 
-    if( result > 0 ){
-
-        size_t i;
-
-        cJSON *jsonenc_args;
-        cJSON *jsonenc_dpnds;
-
-        swref *chkpt_ref;
-        swref *args_ref;
-
-        char *tmp;
-
-        jsonenc_args = cJSON_CreateObject();
-
-        chkpt_ref = sw_move_file_to_store( NULL, path, NULL );
-        cJSON_AddItemToObject( jsonenc_args, "checkpoint", swref_serialize( chkpt_ref ) );
-        swref_free( chkpt_ref );
-
-        tmp = cJSON_PrintUnformatted( jsonenc_args );
-        cJSON_Delete( jsonenc_args );
-
-        args_ref = sw_save_string_to_store( NULL, NULL, tmp );
-        free( tmp );
-
-
-        jsonenc_dpnds = cJSON_CreateObject();
-
-        cJSON_AddItemToObject( jsonenc_dpnds, "_args", swref_serialize( args_ref ) );
-        swref_free( args_ref );
-
-        for(i = 0; i < id_count; i++ ){
-            asprintf( &tmp, "thread%d_output", i );
-            cJSON_AddItemToObject( jsonenc_dpnds, tmp, swref_serialize( output_refs[i] ) );
-            free(tmp);
         }
-
-
-        /* Attempt to POST a new task to CIEL */
-        result = sw_spawntask( cont_task_id,
-                               sw_get_current_output_id(),
-                               sw_get_current_task_id(),
-                               "cldthread",
-                               jsonenc_dpnds,
-                               1 );
-
-        cJSON_Delete( jsonenc_dpnds );
-
-        /* If we managed to spawn a new continuation task, then terminate this process */
-        if( result ) exit( 20 );
-
-        /* Otherwise, clean-up and return (we can't really do anything else) */
-        free( tmp );
-
-    } else if (result < 0) {
-
-
-
-    } else {
-
-        perror( "Couldn't checkpoint continuation task - we should try and work out a way to recover from this.\n" );
+        */
 
     }
 
-    free( cont_task_id );
-    free( path );
-
-    return result;
+    return ref->fd;
 
 }
 
 
-int cldthread_joins( cldthread *thread[], size_t const thread_count ){
+void cldthread_close_stream( swref *ref ){
+
+    if( ref->fd >= 0 ){
+
+        close( ref->fd );
+        ref->fd = -1;
+
+    }
+
+}
+
+size_t cldthread_multi_dereference( swref *refs[], size_t const ref_count ){
 
     size_t i;
-
-    int result;
-
-    const swref **output_refs;
-
     cJSON *json;
 
-    output_refs = calloc( thread_count, sizeof( swref * ) );
+    for( i = 0; i < ref_count; i++ ){
 
-    for( i = 0; i < thread_count; i++ ) output_refs[i] = thread[i]->output_ref;
+        json = _cldthread_dump_ref_as_json( refs[i] );
 
-    result = _cldthread_wait_on_outputs( output_refs, thread_count );
-
-    for( i = 0; i < thread_count; i++ ){
-
-        json = sw_get_json_from_store( output_refs[i] );
+        cldthread_close_stream( refs[i] );
 
         if(json != NULL){
 
@@ -253,23 +210,129 @@ int cldthread_joins( cldthread *thread[], size_t const thread_count ){
 
                 }
 
-                thread[i]->result = (cldvalue *)ref->value;
-
-                swref_free( ref );
+                swref_fatal_merge( refs[i], ref );
 
             }
 
             cJSON_Delete( json );
 
+        } else {
+
+            if(_cldthread_continuation_for_inputs( &refs[i], (ref_count - i) ) >= 0) break;
+            i--;
+
         }
 
     }
+
+    return i;
+
+}
+
+
+int cldthread_joins( cldthread *thread[], size_t const thread_count ){
+
+    size_t i;
+
+    int result;
+
+    swref **output_refs;
+
+    output_refs = calloc( thread_count, sizeof( swref * ) );
+
+    for( i = 0; i < thread_count; i++ ) output_refs[i] = thread[i]->output_ref;
+
+    result = cldthread_multi_dereference( output_refs, thread_count );
+
+    for( i = 0; i < thread_count; i++ ) thread[i]->result = (cldvalue *)output_refs[i]->value;
 
     free(output_refs);
 
     return result;
 
 }
+
+
+char *cldthread_dump_ref( const swref* const ref, size_t * const size_out ){
+
+    char *result = NULL;
+
+    #if VERBOSE
+    printf("Attempting to dump fd (%p)\n", ref );
+    #endif
+
+    if( ref->fd >= 0 ){
+
+        long len;
+        struct stat info;
+
+        fstat( ref->fd, &info);
+        len = info.st_size;
+
+        if( S_ISREG(info.st_mode) ){
+
+            if( (result = malloc(len)) != NULL ){
+
+                if(read(ref->fd, result, len)==len){
+
+                    #if VERBOSE
+                    printf( "--> Read %ld bytes directly from block store file\n", len );
+                    #endif
+
+                    if( size_out != NULL ) *size_out = (size_t)len;
+
+                } else {
+
+                    #if VERBOSE
+                    printf( "--> Fail when attempting to read %ld bytes from block store\n", len );
+                    #endif
+
+                    free( result );
+                    result = NULL;
+
+                }
+
+            }
+
+        } else if ( S_ISFIFO(info.st_mode) ) {
+
+            #if VERBOSE
+            printf( "--> Reading from a FIFO (named pipe)\n" );
+            #endif
+
+            struct MemoryStruct mem = { NULL, 0, 0 };
+            void *buffer = malloc(4096);
+            size_t tmp;
+
+            while( (tmp = read( ref->fd, buffer, 4096 )) ){
+                #if VERBOSE
+                printf( "--> Read %d byte(s) from FIFO...\n", (int)tmp );
+                #endif
+                WriteMemoryCallback( buffer, 1, tmp, &mem );
+            }
+
+            free( buffer );
+
+            result = mem.memory;
+            if( size_out != NULL) *size_out = mem.size;
+
+        } else {
+
+            fprintf( stderr, "ERROR: Unexpected file type (st_mode: %d) whilst attempting to dereference\n", (int)info.st_mode );
+            exit( EXIT_FAILURE );
+
+        }
+
+    }
+
+    #if VERBOSE
+    printf("::: Ref content result: %p\n", result );
+    #endif
+
+    return result;
+
+}
+
 
 void *cldthread_exit( cldvalue *result ){
     _cldthread_submit_output( result, NULL );

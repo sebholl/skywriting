@@ -34,6 +34,7 @@ int main(int argc, char *argv[])
     cldthread_joins( threads, 4 );
 
     for( i = 0; i < 4; i++ ){
+        printf(" Thread %d Output: threads[i]->result: %p, threads[i]->output_ref->value: %p\n", (int)i, threads[i]->result, threads[i]->output_ref->value );
         asprintf( &ret_value, "%sThread %d Output: \"%s\"\n", tmp, i, cldvalue_to_string(threads[i]->result) );
         free(tmp);
         tmp = ret_value;

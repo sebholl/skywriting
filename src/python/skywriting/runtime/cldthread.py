@@ -9,6 +9,7 @@ import logging
 import subprocess
 import os
 import cherrypy
+import time
 from threading import Lock
 
 class CloudThreadTaskExecutionRecord:
@@ -41,9 +42,10 @@ class CloudThreadTaskExecutionRecord:
             commit_bindings[self.expected_outputs[i]] = output_ref
         self.task_executor.master_proxy.commit_task(self.task_id, commit_bindings)
     
-    def fetch_executor_args(self):
+    def get_executor_details(self):
         args_ref = None
         parsed_inputs = {}
+        env = {}
         
         for local_id, ref in self.inputs.iteritems():
             if local_id == '_args':
@@ -51,15 +53,16 @@ class CloudThreadTaskExecutionRecord:
             else:
                 parsed_inputs[local_id] = ref
         
-        self.task_executor.block_store.retrieve_filenames_for_refs_eager( parsed_inputs.values() )
+        input_refs = parsed_inputs.values()
         
-        return self.task_executor.block_store.retrieve_object_for_ref(args_ref, 'json')
+        return (self.task_executor.block_store.retrieve_object_for_ref(args_ref, 'json'), input_refs)
     
     def execute(self):        
         try:
             if self.is_running:
                 cherrypy.engine.publish("worker_event", "Choosing appropriate CloudThread executor")
-                executor = CloudThreadExecutor( self.fetch_executor_args(), None, self.expected_outputs, self.task_executor.master_proxy)
+                args, input_refs = self.get_executor_details();
+                executor = CloudThreadExecutor( args, None, self.expected_outputs, self.task_executor.master_proxy, None, input_refs)
                 with self._lock:
                     self.executor = executor
             if self.is_running:
@@ -85,12 +88,13 @@ class _CloudProcessCommonExecutor(SWExecutor):
         self.args = args
         self.proc = None
         self.env = {}
+        self.input_refs = []
 
-        self.env['SW_MASTER_LOC'] = master_proxy.master_url.replace("http://", "", 1)
-        self.env['SW_OUTPUT_ID'] = expected_output_ids[0]
+        self.env['CL_MASTER_LOC'] = master_proxy.master_url.replace("http://", "", 1)
+        self.env['CL_OUTPUT_ID'] = expected_output_ids[0]
     
     def start_process(self, block_store):
-
+        
         self.before_execute(block_store)
         cherrypy.engine.publish("worker_event", "Executor: running")
         
@@ -110,20 +114,31 @@ class _CloudProcessCommonExecutor(SWExecutor):
 
     def get_process_args(self):
         return [];
-
+    
     def _execute(self, block_store, task_id):
         
         self.task_id = task_id
+        file_inputs, transfer_ctx = block_store.retrieve_filenames_for_refs(self.input_refs)
         
-        self.env['SW_WORKER_LOC'] = block_store.netloc.replace("http://", "", 1)
-        self.env['SW_BLOCK_STORE'] = block_store.base_dir
-        self.env['SW_TASK_ID'] = task_id
+        self.env['CL_WORKER_LOC'] = block_store.netloc.replace("http://", "", 1)
+        self.env['CL_BLOCK_STORE'] = block_store.base_dir
+        self.env['CL_TASK_ID'] = task_id
+        
+        for i, ref in enumerate(self.input_refs):
+            self.env['CL_PATH_' + ref.id] = file_inputs[i]
         
         self.proc = self.start_process(block_store)
         add_running_child(self.proc)
+        
+        transfer_ctx.consumers_attached();
 
         rc = self.proc.wait()
+        
         remove_running_child(self.proc)
+        
+        transfer_ctx.wait_for_all_transfers()
+        
+        transfer_ctx.cleanup(block_store)
 
         self.proc = None
 
@@ -172,9 +187,10 @@ class CloudAppExecutor(_CloudProcessCommonExecutor):
         
 class CloudThreadExecutor(_CloudProcessCommonExecutor):
 
-    def __init__(self, args, continuation, expected_output_ids, master_proxy, fetch_limit=None):
+    def __init__(self, args, continuation, expected_output_ids, master_proxy, fetch_limit=None, input_refs=[]):
         _CloudProcessCommonExecutor.__init__(self, args, continuation, expected_output_ids, master_proxy, fetch_limit)
         try:
+            self.input_refs = input_refs
             self.checkpoint_ref = self.args['checkpoint']
         except KeyError:
             raise BlameUserException('Incorrect arguments to the CloudThread executor: %s' % repr(self.args))
@@ -182,12 +198,17 @@ class CloudThreadExecutor(_CloudProcessCommonExecutor):
     def before_execute(self, block_store):
         self.checkpoint_filenames = self.get_filenames_eager(block_store, [self.checkpoint_ref])
         
+        self.sync_fifo_path = os.path.join('/tmp/', self.task_id + ":sync")
         self.comm_fifo_path = os.path.join('/tmp/', self.task_id)
+        
+        os.mkfifo(self.sync_fifo_path)
         os.mkfifo(self.comm_fifo_path)
         
     def process_manage(self, proc):
         
         cherrypy.log.error("Opening named pipe: %s" % self.comm_fifo_path, "CloudThreadExecutor", logging.INFO)
+        
+        # This blocks until the C process opens up the pipe for reading
         fifo = open(self.comm_fifo_path, 'w')
         
         #cherrypy.log.error("Writing to named pipe: %s" % self.comm_fifo_path, "CloudThreadExecutor", logging.INFO)
@@ -200,6 +221,11 @@ class CloudThreadExecutor(_CloudProcessCommonExecutor):
         fifo.close()
         
         cherrypy.log.error("Closed named pipe: %s" % self.comm_fifo_path, "CloudThreadExecutor", logging.INFO)
+        
+        #Sync to make sure that the FDs are ready
+        open(self.sync_fifo_path, 'r').close()
+        os.remove(self.sync_fifo_path)
+        
 
     def get_process_args(self):
         cherrypy.log.error("CloudThreadExecutor checkpoint path : %s" % self.checkpoint_filenames, "CloudThreadExecutor", logging.INFO)

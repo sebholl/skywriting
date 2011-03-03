@@ -25,22 +25,6 @@ static char *_sha1_hex_digest_from_bytes( const char *bytes, unsigned int len, i
 }
 
 
-static char *_sw_generate_block_store_path( const char *id ){
-
-    char *result;
-
-    int len;
-    const char *separator = "/";
-    const char *path = sw_get_block_store_path();
-
-    len = strlen( path );
-
-    if( (len > 0) && (path[len-1] == separator[0]) ) separator = "";
-
-    return (asprintf( &result, "%s%s%s", path, separator, id ) != -1) ? result : NULL;
-
-}
-
 static char *_sw_generate_temp_path( const char *id ){
 
     char *result;
@@ -125,7 +109,7 @@ static swref *_sw_post_data_to_worker( const char *worker_loc, const char *id, c
 static int _sw_move_to_block_store( const char *filepath, const char *id ){
 
     int result = 0;
-    char *bpath = _sw_generate_block_store_path( id );
+    char *bpath = sw_generate_block_store_path( id );
 
     if(bpath!=NULL){
 
@@ -167,7 +151,7 @@ static swref *_sw_write_block_store( const char *id, const void *data, size_t si
 
 }
 
-
+/*
 static char *_sw_get_data_through_http( const swref *ref, size_t *size_out ){
 
     CURLcode result;
@@ -288,6 +272,7 @@ static void *_sw_stream_data_through_http( void *args ){
 
 }
 
+
 static int _sw_async_stream_data_through_http( const swref *ref, const char *fifo_path ){
 
     pthread_t pthread;
@@ -299,9 +284,7 @@ static int _sw_async_stream_data_through_http( const swref *ref, const char *fif
     return (pthread_create(&pthread, NULL, _sw_stream_data_through_http, args) == 0);
 
 }
-
-
-
+*/
 
 static swref *_sw_post_file_to_worker( const char *worker_loc, const char *filepath ){
 
@@ -343,7 +326,7 @@ static swref *_sw_post_file_to_worker( const char *worker_loc, const char *filep
 
     curl_easy_setopt( handle, CURLOPT_POSTFIELDSIZE, buf.st_size );
 
-    id = sw_generate_new_task_id( "file" );
+    id = sw_generate_task_id( "cldthread", sw_get_current_task_id(), "file" );
 
     asprintf( &post_url, "http://%s/data/%s/", worker_loc, id );
 

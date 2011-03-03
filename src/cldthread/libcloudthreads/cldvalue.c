@@ -5,6 +5,7 @@
 #include <float.h>
 #include <math.h>
 
+#include "cldthread.h"
 #include "cldvalue.h"
 #include "sw_interface.h"
 
@@ -120,7 +121,7 @@ cldvalue *cldvalue_from_json( cJSON *json ){
 
                 if( ref != NULL ){
 
-                    result->value.data = sw_dereference( ref, &(result->size) );
+                    result->value.data = cldthread_dump_ref( ref, &(result->size) );
                     swref_free( ref );
 
                 }

@@ -12,6 +12,7 @@ swref *swref_create( enum swref_type type, const char *ref_id, const cldvalue *v
     result->type = type;
     result->ref_id = strdup(ref_id);
     result->size = size;
+    result->fd = -1;
 
     if( loc_hint != NULL ){
         result->loc_hints = calloc( 2, sizeof(char *) );
@@ -33,6 +34,7 @@ void swref_fatal_merge( swref *const receiver, swref *const sender ){
     receiver->size = sender->size;
     receiver->loc_hints = sender->loc_hints;
     receiver->loc_hints_size = sender->loc_hints_size;
+    receiver->value = sender->value;
 
     free( (char *)sender->ref_id );
     free( sender );

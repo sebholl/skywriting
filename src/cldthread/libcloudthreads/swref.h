@@ -29,6 +29,7 @@ typedef struct swref {
                       SWREFTYPE_ENUMMAX = OTHER} type;
 
     const char *ref_id;
+    int fd;
     uintmax_t size;
     const char **loc_hints;
     uintmax_t loc_hints_size;
