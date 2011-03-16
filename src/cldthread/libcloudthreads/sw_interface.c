@@ -94,7 +94,61 @@ int sw_spawntask( const char *new_task_id,
 
 }
 
-/* NON-DETERMINISTIC
+int sw_publish_ref( const char *master_loc, const char *task_id, const swref *ref ){
+
+    char *post_url;
+
+    CURLcode result;
+    CURL *handle;
+    struct curl_slist *chunk;
+
+    struct MemoryStruct postdata;
+
+    handle = curl_easy_init();
+
+    curl_easy_setopt( handle, CURLOPT_FAILONERROR, 1 );
+
+    #if VERBOSE
+    printf("Attempting to publish ref for task \"%s\".\n", task_id );
+    curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
+    #endif
+
+    curl_easy_setopt( handle, CURLOPT_POST, 1 );
+    curl_easy_setopt( handle, CURLOPT_READFUNCTION, &ReadMemoryCallback );
+
+    cJSON *json = cJSON_CreateObject();
+
+    cJSON_AddItemToObject( json, ref->id->id_str, swref_serialize( ref ) );
+
+    postdata.memory = cJSON_PrintUnformatted( json );
+    postdata.size = strlen(postdata.memory)*sizeof(char);
+    postdata.offset = 0;
+
+    cJSON_Delete( json );
+
+    curl_easy_setopt( handle, CURLOPT_POSTFIELDSIZE, postdata.size );
+    curl_easy_setopt( handle, CURLOPT_READDATA, &postdata );
+
+    chunk = NULL;
+    chunk = curl_slist_append( chunk, "Content-Type: identity" );
+    curl_easy_setopt( handle, CURLOPT_HTTPHEADER, chunk );
+
+    asprintf( &post_url, "http://%s/task/%s/publish/", master_loc, task_id );
+    curl_easy_setopt( handle, CURLOPT_URL, post_url );
+    free( post_url );
+
+    result = curl_easy_perform( handle );
+
+    curl_easy_cleanup( handle );
+    curl_slist_free_all( chunk );
+
+    free( postdata.memory );
+
+    return (result==CURLE_OK);
+
+}
+
+#if ALLOW_NONDETERMINISM
 
 cJSON *sw_query_info_for_output_id( const char *output_id ){
 
@@ -132,7 +186,7 @@ cJSON *sw_query_info_for_output_id( const char *output_id ){
     return result;
 
 }
-*/
+
 
 
 int sw_abort_task( const char *master_loc, const char *task_id ){
@@ -164,6 +218,8 @@ int sw_abort_task( const char *master_loc, const char *task_id ){
 
 }
 
+#endif
+
 char *sw_generate_block_store_path( const char *id ){
 
     char *result;
@@ -192,7 +248,7 @@ static char *_sw_get_filename( const char * const id ){
 
 }
 
-int sw_open_fd_for_ref( const char *id ){
+int sw_open_fd_for_id( const char *id ){
 
     int result = -1;
     char *path = _sw_get_filename( id );
@@ -217,6 +273,93 @@ int sw_open_fd_for_ref( const char *id ){
     return result;
 
 }
+
+char *sw_dump_id( const char *id, size_t * const size_out ){
+
+    char *result = NULL;
+
+    int fd = sw_open_fd_for_id( id );
+
+    #if VERBOSE
+    printf("Attempting to dump fd (%d) for id (%s)\n", fd, id );
+    #endif
+
+    if( fd >= 0 ){
+
+        long len;
+        struct stat info;
+
+        fstat( fd, &info);
+        len = info.st_size;
+
+        if( S_ISREG(info.st_mode) ){
+
+            if( (result = malloc(len)) != NULL ){
+
+                if(read(fd, result, len)==len){
+
+                    #if VERBOSE
+                    printf( "--> Read %ld bytes directly from block store file\n", len );
+                    #endif
+
+                    if( size_out != NULL ) *size_out = (size_t)len;
+
+                } else {
+
+                    #if VERBOSE
+                    printf( "--> Fail when attempting to read %ld bytes from block store\n", len );
+                    #endif
+
+                    free( result );
+                    result = NULL;
+
+                }
+
+            }
+
+        } else if ( S_ISFIFO(info.st_mode) ) {
+
+            #if VERBOSE
+            printf( "--> Reading from a FIFO (named pipe)\n" );
+            #endif
+
+            struct MemoryStruct mem = { NULL, 0, 0 };
+            void *buffer = malloc(4096);
+            size_t tmp;
+
+            while( (tmp = read( fd, buffer, 4096 )) ){
+                #if VERBOSE
+                printf( "--> Read %d byte(s) from FIFO...\n", (int)tmp );
+                #endif
+                WriteMemoryCallback( buffer, 1, tmp, &mem );
+            }
+
+            free( buffer );
+
+            result = mem.memory;
+            if( size_out != NULL) *size_out = mem.size;
+
+        } else {
+
+            fprintf( stderr, "ERROR: Unexpected file type (st_mode: %d) whilst attempting to dump ID (%s)\n", (int)info.st_mode, id );
+            exit( EXIT_FAILURE );
+
+        }
+
+        close( fd );
+
+    }
+
+
+
+    #if VERBOSE
+    printf("::: ID content result: %p\n", result );
+    #endif
+
+    return result;
+
+}
+
 
 
 swref *sw_move_file_to_store( const char *worker_url, const char *filepath, const char *id ){

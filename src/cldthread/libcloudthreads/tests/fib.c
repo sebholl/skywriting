@@ -59,7 +59,7 @@ void *Fib(void *_index){
             printf("--> Joining threads...\n" );
             cldthread_joins( thread, 2 );
             printf("--> Evaluating result...\n" );
-            result = cldvalue_to_intmax(thread[0]->result) + cldvalue_to_intmax(thread[1]->result);
+            result = cldthread_result_as_intmax(thread[0]) + cldthread_result_as_intmax(thread[1]);
             break;
         }
     }

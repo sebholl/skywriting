@@ -5,14 +5,13 @@
 #include "sw_interface.h"
 #include "swref.h"
 
-swref *swref_create( enum swref_type type, const char *ref_id, const cldvalue *value, uintmax_t size, const char *loc_hint ){
+swref *swref_create( enum swref_type type, const char *id, cldvalue *value, uintmax_t size, const char *loc_hint ){
 
     swref *result = calloc( 1, sizeof(swref) );
 
     result->type = type;
-    result->ref_id = strdup(ref_id);
+    result->id = cielID_create( id );
     result->size = size;
-    result->fd = -1;
 
     if( loc_hint != NULL ){
         result->loc_hints = calloc( 2, sizeof(char *) );
@@ -36,7 +35,7 @@ void swref_fatal_merge( swref *const receiver, swref *const sender ){
     receiver->loc_hints_size = sender->loc_hints_size;
     receiver->value = sender->value;
 
-    free( (char *)sender->ref_id );
+    cielID_free( sender->id );
     free( sender );
 
 }
@@ -57,14 +56,14 @@ void swref_free( swref *ref ){
 
         }
 
-        free((char *)ref->ref_id);
+        cielID_free( ref->id );
         free((swref *)ref);
 
     }
 
 }
 
-cJSON *swref_serialize( const swref * const ref ){
+cJSON *swref_serialize( const swref *const ref ){
 
     cJSON *result = NULL;
 
@@ -73,7 +72,7 @@ cJSON *swref_serialize( const swref * const ref ){
         cJSON *array = cJSON_CreateArray();
 
         cJSON_AddItemToArray( array, cJSON_CreateString(swref_map_type_tuple_id[ref->type]) );
-        cJSON_AddItemToArray( array, cJSON_CreateString(ref->ref_id) );
+        cJSON_AddItemToArray( array, cJSON_CreateString(ref->id->id_str) );
 
         switch( ref->type ){
             case FUTURE:
@@ -95,13 +94,6 @@ cJSON *swref_serialize( const swref * const ref ){
                             break;
                         case STRING:
                             cJSON_AddItemToArray( array, cJSON_CreateString( val->value.string ) );
-                            break;
-                        case BINARY:
-                        {
-                            swref *ref = sw_save_data_to_store( NULL, NULL, val->value.data, val->size );
-                            result = swref_serialize( ref );
-                            swref_free(ref);
-                        }
                             break;
                         default:
                             cJSON_AddItemToArray( array, cJSON_CreateNull() );
@@ -135,6 +127,35 @@ cJSON *swref_serialize( const swref * const ref ){
 
 }
 
+swref *swref_at_id( cielID *id ){
+
+    swref* result = NULL;
+
+    size_t size;
+    char *dump;
+
+    dump = cielID_dump_stream( id, &size );
+
+    if( dump != NULL && size > 0 ){
+
+        cJSON *json = cJSON_Parse( dump );
+
+        if( json != NULL ){
+
+            result = swref_deserialize( json );
+            cJSON_Delete( json );
+
+        }
+
+        free( dump );
+
+    }
+
+    return result;
+
+}
+
+
 swref *swref_deserialize( cJSON *json ){
 
     cJSON *ref;
@@ -159,7 +180,7 @@ swref *swref_deserialize( cJSON *json ){
             }
         }
 
-        result->ref_id = strdup(cJSON_GetArrayItem( ref, 1 )->valuestring);
+        result->id = cielID_create( cJSON_GetArrayItem( ref, 1 )->valuestring );
 
         switch(result->type){
 
@@ -203,3 +224,25 @@ swref *swref_deserialize( cJSON *json ){
 
 }
 
+
+
+
+
+inline intmax_t swref_to_intmax( const swref *ref ){
+    if( ref->type != DATA || ref->value->type != INTEGER ) fprintf(stderr,"cldvalue invalid cast\n");
+    return ref->value->value.integer;
+}
+
+inline double swref_to_double( const swref *ref ){
+    if( ref->type != DATA || ref->value->type != REAL ) fprintf(stderr,"cldvalue invalid cast\n");
+    return (double)ref->value->value.real;
+}
+
+inline const char * swref_to_string( const swref *ref ){
+    if( ref->type != DATA || ref->value->type != STRING ) fprintf(stderr,"cldvalue invalid cast\n");
+    return ref->value->value.string;
+}
+
+inline cielID * cielID_of_swref( const swref *ref ){
+    return ref->id;
+}

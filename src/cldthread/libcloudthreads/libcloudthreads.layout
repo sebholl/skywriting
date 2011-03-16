@@ -1,34 +1,61 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
 <CodeBlocks_layout_file>
 	<ActiveTarget name="fib" />
-	<File name="_cldthread.c" open="1" top="1" tabpos="8">
-		<Cursor position="2755" topLine="102" />
+	<File name="_cldthread.c" open="1" top="0" tabpos="8">
+		<Cursor position="2034" topLine="70" />
 	</File>
 	<File name="_sw_interface.c" open="1" top="0" tabpos="7">
 		<Cursor position="7166" topLine="299" />
 	</File>
 	<File name="blcr_interface.c" open="1" top="0" tabpos="1">
-		<Cursor position="2886" topLine="0" />
+		<Cursor position="2568" topLine="26" />
+	</File>
+	<File name="cJSON.h" open="1" top="0" tabpos="19">
+		<Cursor position="3778" topLine="79" />
+	</File>
+	<File name="cielID.c" open="1" top="0" tabpos="16">
+		<Cursor position="20" topLine="27" />
+	</File>
+	<File name="cielID.h" open="1" top="0" tabpos="17">
+		<Cursor position="246" topLine="0" />
 	</File>
 	<File name="cldthread.c" open="1" top="0" tabpos="5">
-		<Cursor position="1670" topLine="68" />
+		<Cursor position="4208" topLine="178" />
 	</File>
-	<File name="cldthread.h" open="1" top="0" tabpos="4">
-		<Cursor position="625" topLine="9" />
+	<File name="cldthread.h" open="1" top="1" tabpos="4">
+		<Cursor position="753" topLine="7" />
 	</File>
 	<File name="cldvalue.c" open="1" top="0" tabpos="6">
-		<Cursor position="3212" topLine="10" />
+		<Cursor position="1091" topLine="64" />
 	</File>
-	<File name="curl_helper_functions.c" open="0" top="0" tabpos="0">
-		<Cursor position="711" topLine="15" />
+	<File name="cldvalue.h" open="1" top="0" tabpos="15">
+		<Cursor position="0" topLine="0" />
+	</File>
+	<File name="curl_helper_functions.c" open="1" top="0" tabpos="18">
+		<Cursor position="84" topLine="4" />
 	</File>
 	<File name="sw_interface.c" open="1" top="0" tabpos="2">
-		<Cursor position="7007" topLine="281" />
+		<Cursor position="8077" topLine="315" />
 	</File>
 	<File name="sw_interface.h" open="1" top="0" tabpos="9">
-		<Cursor position="1327" topLine="37" />
+		<Cursor position="1134" topLine="21" />
+	</File>
+	<File name="swref.c" open="1" top="0" tabpos="10">
+		<Cursor position="6298" topLine="216" />
+	</File>
+	<File name="swref.h" open="1" top="0" tabpos="11">
+		<Cursor position="1585" topLine="22" />
+	</File>
+	<File name="tests/fib.c" open="1" top="0" tabpos="12">
+		<Cursor position="1395" topLine="36" />
 	</File>
 	<File name="tests/helloworld.c" open="1" top="0" tabpos="3">
-		<Cursor position="327" topLine="31" />
+		<Cursor position="327" topLine="25" />
+	</File>
+	<File name="tests/pi.c" open="1" top="0" tabpos="13">
+		<Cursor position="0" topLine="0" />
+	</File>
+	<File name="tests/sha_stream.c" open="1" top="0" tabpos="14">
+		<Cursor position="750" topLine="33" />
 	</File>
 </CodeBlocks_layout_file>

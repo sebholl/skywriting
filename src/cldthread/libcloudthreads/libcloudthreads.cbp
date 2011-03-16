@@ -48,6 +48,16 @@
 					<Add option="-g" />
 				</Compiler>
 			</Target>
+			<Target title="wordcount">
+				<Option output="bin/wordcount/wordcount" prefix_auto="1" extension_auto="1" />
+				<Option working_dir="../../../../" />
+				<Option object_output="obj/wordcount/" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-g" />
+				</Compiler>
+			</Target>
 		</Build>
 		<Compiler>
 			<Add option="-Wall" />
@@ -75,6 +85,10 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="cJSON.h" />
+		<Unit filename="cielID.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="cielID.h" />
 		<Unit filename="cldthread.c">
 			<Option compilerVar="CC" />
 		</Unit>
@@ -112,6 +126,10 @@
 			<Option compile="0" />
 			<Option link="0" />
 			<Option target="pi" />
+		</Unit>
+		<Unit filename="tests/sha_stream.c">
+			<Option compilerVar="CC" />
+			<Option target="wordcount" />
 		</Unit>
 		<Extensions>
 			<code_completion />

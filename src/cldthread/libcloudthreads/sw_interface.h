@@ -2,7 +2,8 @@
 
 #include "swref.h"
 
-//#define VERBOSE 1
+#define VERBOSE 0
+#define ALLOW_NONDETERMINISM 0
 
 /* Initialization */
 
@@ -18,9 +19,16 @@ int sw_spawntask( const char *new_task_id,
                   cJSON *jsonenc_dependencies,
                   int const is_continuation );
 
-//cJSON *sw_query_info_for_output_id( const char *output_id );
+
+int sw_publish_ref( const char *master_loc, const char *task_id, const swref *ref );
+
+#if ALLOW_NONDETERMINISM
+
+cJSON *sw_query_info_for_output_id( const char *output_id );
 
 int sw_abort_task( const char *master_url, const char *task_id );
+
+#endif
 
 
 /* Block-store access */
@@ -33,7 +41,7 @@ swref *sw_move_file_to_store( const char *worker_loc, const char *filepath, cons
 
 char *sw_generate_block_store_path( const char *id );
 
-int sw_open_fd_for_ref( const char *id );
+int sw_open_fd_for_id( const char *id );
 
 /* Environment querying */
 

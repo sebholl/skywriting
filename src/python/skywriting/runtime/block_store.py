@@ -674,7 +674,7 @@ class StreamTransferContext(pycURLContextCallbacks):
 
     def log_trace(self):
         for (t, e) in self.io_trace:
-            cherrypy.engine.publish("worker_event", "Fetch trace %d %f %s" % (self.report_index, t, e))
+            cherrypy.log.error("Fetch trace %d %f %s" % (self.report_index, t, e), "CURL_FETCH", logging.INFO)
         self.fifo_sink.log_trace()
 
     def start(self):
@@ -850,8 +850,8 @@ class StreamTransferContext(pycURLContextCallbacks):
         
     def cleanup(self):
         # Called from arbitrary thread, but only after all cURL callbacks have completed
-        cherrypy.log.error('Closing sink file for %s (wrote %d bytes, tell = %d, errors = %s)' 
-                           % (self.save_id, self.current_start_byte, self.sink_fp.tell(), str(self.sink_fp.errors)), 
+        cherrypy.log.error('Closing sink file %s for %s (wrote %d bytes, tell = %d, errors = %s)' 
+                           % (self.fifo_name, self.save_id, self.current_start_byte, self.sink_fp.tell(), str(self.sink_fp.errors)), 
                            'CURL_FETCH', logging.DEBUG)
         self.sink_fp.flush()
         self.sink_fp.close()
@@ -945,7 +945,7 @@ class BlockStore(plugins.SimplePlugin):
     
     def maybe_streaming_filename(self, id):
         with self._lock:
-            if id in self.streaming_id_set:
+            if (id in self.streaming_id_set) or (os.path.isfile( self.streaming_filename(id) ) and not os.path.islink( self.streaming_filename(id) )):
                 return True, self.streaming_filename(id)
             else:
                 return False, self.filename(id)

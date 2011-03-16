@@ -17,8 +17,8 @@ static inline void _strip_new_line( char *string ){
 }
 
 
-static swref **_input_refs = NULL;
-static size_t _input_refs_count;
+static cielID **_input_id = NULL;
+static size_t _input_id_count;
 
 static void _cldthread_update_env( void ){
 
@@ -60,9 +60,9 @@ static void _cldthread_update_env( void ){
     remove( path );
     free( path );
 
-    if( _input_refs != NULL ){
+    if( _input_id != NULL ){
 
-        for(i = 0; i < _input_refs_count; i++) cldthread_open_stream( _input_refs[i] );
+        for(i = 0; i < _input_id_count; i++) cielID_read_stream( _input_id[i] );
 
     }
 
@@ -71,23 +71,37 @@ static void _cldthread_update_env( void ){
 
 }
 
+static cielID *_outputstream = NULL;
+
 static void _cldthread_submit_output( cldvalue *value, void *output ){
 
-    swref* ref = swref_create( DATA, sw_get_current_output_id(), value, 0, NULL );
+    if ( _outputstream == NULL ){
 
-    cJSON *json = swref_serialize( ref );
+        swref* data = swref_create( DATA, sw_get_current_output_id(), value, 0, NULL );
 
-    char *tmp = cJSON_PrintUnformatted( json );
+        cJSON *json = swref_serialize( data );
 
-    cJSON_Delete( json );
+        char *tmp = cJSON_PrintUnformatted( json );
 
-    swref_free( ref );
+        cJSON_Delete( json );
 
-    sw_save_string_to_store( NULL, sw_get_current_output_id(), tmp );
+        swref_free( data );
 
-    free( tmp );
+        sw_save_string_to_store( NULL, sw_get_current_output_id(), tmp );
+
+        free( tmp );
+
+    } else {
+
+        cielID_finalize_stream( _outputstream );
+        cielID_free( _outputstream );
+        _outputstream = NULL;
+
+    }
 
 }
+
+
 
 
 static int _cldthread_task_checkpoint( const char *resume_task_id,
@@ -109,6 +123,11 @@ static int _cldthread_task_checkpoint( const char *resume_task_id,
     /* result < 0 iff this execution is resumption of
      * a checkpoint using cr_restart etc.              */
     if( result < 0 ){
+
+        if( _outputstream != NULL ){
+            cielID_free( _outputstream );
+            _outputstream = NULL;
+        }
 
         _cldthread_update_env();
 
@@ -138,7 +157,7 @@ static int _cldthread_task_checkpoint( const char *resume_task_id,
 
 
 
-static int _cldthread_continuation_for_inputs( swref *input_refs[], size_t id_count ){
+static int _cldthread_continuation_for_inputs( cielID *input_id[], size_t input_count ){
 
     int result;
     size_t i;
@@ -151,13 +170,13 @@ static int _cldthread_continuation_for_inputs( swref *input_refs[], size_t id_co
 
     asprintf( &path, "/tmp/%s.checkpoint.continuation", sw_get_current_task_id() );
 
-    _input_refs = input_refs;
-    _input_refs_count = id_count;
+    _input_id = input_id;
+    _input_id_count = input_count;
 
     result = _cldthread_task_checkpoint( cont_task_id, NULL, path, NULL, NULL );
 
-    _input_refs = NULL;
-    _input_refs_count = 0;
+    _input_id = NULL;
+    _input_id_count = 0;
 
     if( result > 0 ){
 
@@ -187,9 +206,13 @@ static int _cldthread_continuation_for_inputs( swref *input_refs[], size_t id_co
         cJSON_AddItemToObject( jsonenc_dpnds, "_args", swref_serialize( args_ref ) );
         swref_free( args_ref );
 
-        for(i = 0; i < id_count; i++ ){
+        swref *ref;
+
+        for(i = 0; i < input_count; i++ ){
             asprintf( &tmp, "input%d", i );
-            cJSON_AddItemToObject( jsonenc_dpnds, tmp, swref_serialize( input_refs[i] ) );
+            ref = swref_create( FUTURE, input_id[i]->id_str, NULL, 0, NULL );
+            cJSON_AddItemToObject( jsonenc_dpnds, tmp, swref_serialize( ref) );
+            swref_free( ref );
             free(tmp);
         }
 
@@ -221,23 +244,6 @@ static int _cldthread_continuation_for_inputs( swref *input_refs[], size_t id_co
 
     free( cont_task_id );
     free( path );
-
-    return result;
-
-}
-
-static cJSON *_cldthread_dump_ref_as_json( const swref *ref ){
-
-    cJSON *result = NULL;
-
-    char *str = cldthread_dump_ref( ref, NULL );
-
-    if( str != NULL ){
-
-        result = cJSON_Parse( str );
-        free(str);
-
-    }
 
     return result;
 

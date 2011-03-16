@@ -1,12 +1,9 @@
 #define _GNU_SOURCE
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
 
 #include "cJSON.h"
+#include "swref.h"
 
 #include "cldthread.h"
 
@@ -50,7 +47,7 @@ cldthread *cldthread_smart_create( void *(*fptr)(void *), void *arg0, char *grou
 
     thread_output_id = sw_generate_output_id( thread_task_id );
 
-    /*
+    /* NON-DETERMINISTIC
     if(group_id != NULL){
 
         cJSON *info = sw_query_info_for_output_id( thread_output_id );
@@ -71,11 +68,11 @@ cldthread *cldthread_smart_create( void *(*fptr)(void *), void *arg0, char *grou
                 free( thread_task_id );
                 free( thread_output_id );
 
-                return result;
-
             }
 
             cJSON_Delete(info);
+
+            if( result != NULL ) return result;
 
         }
 
@@ -121,10 +118,7 @@ cldthread *cldthread_smart_create( void *(*fptr)(void *), void *arg0, char *grou
                           jsonenc_dpnds,
                           0 )                          ) {
 
-            result = _create_cldthread_object();
-            result->task_id = thread_task_id;
-            result->output_ref = swref_create( FUTURE, thread_output_id, NULL, 0, sw_get_current_worker_loc() );
-            result->result = NULL;
+            result = cielID_create( thread_output_id );
 
         };
 
@@ -149,76 +143,19 @@ cldthread *cldthread_smart_create( void *(*fptr)(void *), void *arg0, char *grou
 }
 
 
-int cldthread_open_stream( swref *ref ){
-
-    if( (ref->fd) < 0 ){
-
-        ref->fd = sw_open_fd_for_ref( ref->ref_id );
-
-        /*
-        if( (ref->fd) < 0 ){
-
-            _cldthread_continuation_for_inputs( &ref, 1 );
-            ref->fd = sw_open_fd_for_ref( ref->ref_id );
-
-        }
-        */
-
-    }
-
-    return ref->fd;
-
-}
-
-
-void cldthread_close_stream( swref *ref ){
-
-    if( ref->fd >= 0 ){
-
-        close( ref->fd );
-        ref->fd = -1;
-
-    }
-
-}
-
-size_t cldthread_multi_dereference( swref *refs[], size_t const ref_count ){
+size_t cldthread_joins( cielID *id[], size_t const count ){
 
     size_t i;
-    cJSON *json;
 
-    for( i = 0; i < ref_count; i++ ){
+    for( i = 0; i < count; i++ ){
 
-        json = _cldthread_dump_ref_as_json( refs[i] );
+        #if VERBOSE
+        printf("Attempting to open stream (%s)\n", id[i]->id_str );
+        #endif
 
-        cldthread_close_stream( refs[i] );
+        if( cielID_read_stream(id[i]) < 0 ){
 
-        if(json != NULL){
-
-            swref *ref = swref_deserialize( json );
-
-            if(ref!=NULL){
-
-                switch(ref->type){
-
-                    case CONCRETE:
-                        if(ref->value==NULL) ref->value = cldvalue_from_json( json );
-                        break;
-
-                    default:
-                        break;
-
-                }
-
-                swref_fatal_merge( refs[i], ref );
-
-            }
-
-            cJSON_Delete( json );
-
-        } else {
-
-            if(_cldthread_continuation_for_inputs( &refs[i], (ref_count - i) ) >= 0) break;
+            if(_cldthread_continuation_for_inputs( &id[i], (count - i) ) >= 0) break;
             i--;
 
         }
@@ -230,123 +167,61 @@ size_t cldthread_multi_dereference( swref *refs[], size_t const ref_count ){
 }
 
 
-int cldthread_joins( cldthread *thread[], size_t const thread_count ){
+int cldthread_open_result_as_stream( void ){
 
-    size_t i;
+    if( _outputstream == NULL ) {
 
-    int result;
-
-    swref **output_refs;
-
-    output_refs = calloc( thread_count, sizeof( swref * ) );
-
-    for( i = 0; i < thread_count; i++ ) output_refs[i] = thread[i]->output_ref;
-
-    result = cldthread_multi_dereference( output_refs, thread_count );
-
-    for( i = 0; i < thread_count; i++ ) thread[i]->result = (cldvalue *)output_refs[i]->value;
-
-    free(output_refs);
-
-    return result;
-
-}
-
-
-char *cldthread_dump_ref( const swref* const ref, size_t * const size_out ){
-
-    char *result = NULL;
-
-    #if VERBOSE
-    printf("Attempting to dump fd (%p)\n", ref );
-    #endif
-
-    if( ref->fd >= 0 ){
-
-        long len;
-        struct stat info;
-
-        fstat( ref->fd, &info);
-        len = info.st_size;
-
-        if( S_ISREG(info.st_mode) ){
-
-            if( (result = malloc(len)) != NULL ){
-
-                if(read(ref->fd, result, len)==len){
-
-                    #if VERBOSE
-                    printf( "--> Read %ld bytes directly from block store file\n", len );
-                    #endif
-
-                    if( size_out != NULL ) *size_out = (size_t)len;
-
-                } else {
-
-                    #if VERBOSE
-                    printf( "--> Fail when attempting to read %ld bytes from block store\n", len );
-                    #endif
-
-                    free( result );
-                    result = NULL;
-
-                }
-
-            }
-
-        } else if ( S_ISFIFO(info.st_mode) ) {
-
-            #if VERBOSE
-            printf( "--> Reading from a FIFO (named pipe)\n" );
-            #endif
-
-            struct MemoryStruct mem = { NULL, 0, 0 };
-            void *buffer = malloc(4096);
-            size_t tmp;
-
-            while( (tmp = read( ref->fd, buffer, 4096 )) ){
-                #if VERBOSE
-                printf( "--> Read %d byte(s) from FIFO...\n", (int)tmp );
-                #endif
-                WriteMemoryCallback( buffer, 1, tmp, &mem );
-            }
-
-            free( buffer );
-
-            result = mem.memory;
-            if( size_out != NULL) *size_out = mem.size;
-
-        } else {
-
-            fprintf( stderr, "ERROR: Unexpected file type (st_mode: %d) whilst attempting to dereference\n", (int)info.st_mode );
-            exit( EXIT_FAILURE );
-
-        }
+        _outputstream = cielID_create( sw_get_current_output_id() );
 
     }
 
-    #if VERBOSE
-    printf("::: Ref content result: %p\n", result );
-    #endif
-
-    return result;
+    return cielID_publish_stream( _outputstream );
 
 }
 
 
-void *cldthread_exit( cldvalue *result ){
+
+void *cldthread_exit( cldvalue *const result ){
     _cldthread_submit_output( result, NULL );
     exit(EXIT_SUCCESS);
     return 0;
 }
 
-void cldthread_free( cldthread *const thread ){
 
-    if(thread->task_id!=NULL) free(thread->task_id);
-    if(thread->output_ref!=NULL) swref_free((void *)thread->output_ref);
-    if(thread->result!=NULL) cldvalue_free(thread->result);
 
-    free(thread);
+intmax_t cldthread_result_as_intmax( cldthread *const thread ){
+
+    swref *ref = swref_at_id( thread );
+    cielID_close_stream( thread );
+
+    intmax_t result = swref_to_intmax( ref );
+    swref_free( ref );
+
+    return result;
+
+}
+
+double cldthread_result_as_double( cldthread *const thread ){
+
+    swref *ref = swref_at_id( thread );
+    cielID_close_stream( thread );
+
+    double result = swref_to_double( ref );
+    swref_free( ref );
+
+    return result;
+
+}
+
+const char *cldthread_result_as_string( cldthread *const thread ){
+
+    swref *ref = swref_at_id( thread );
+    cielID_close_stream( thread );
+
+    const char *result = swref_to_string( ref );
+    swref_free( ref );
+
+    return result;
 
 }
 

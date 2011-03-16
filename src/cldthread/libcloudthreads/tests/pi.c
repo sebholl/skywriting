@@ -95,7 +95,7 @@ double Pi_Reducer(int const numSamples, int const numSurveys){
     long numInside = 0L;
 
     for(i = 0; i < numSurveys; i++){
-        numInside += cldvalue_to_long( threads[i]->result );
+        numInside += cldthread_result_as_long( threads[i] );
     }
 
     free(threads);

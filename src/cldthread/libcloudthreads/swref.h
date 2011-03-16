@@ -1,10 +1,13 @@
+/* SWReference Equivalent */
+
 #pragma once
 
 #include <stdint.h>
 #include "cldvalue.h"
 #include "cJSON.h"
+#include "cielID.h"
 
-static const char * const swref_map_type_tuple_id[] = { "err",
+static const char *const swref_map_type_tuple_id[] = { "err",
                                           "f2",
                                           "c2",
                                           "s2",
@@ -28,18 +31,25 @@ typedef struct swref {
                       OTHER,
                       SWREFTYPE_ENUMMAX = OTHER} type;
 
-    const char *ref_id;
-    int fd;
+    cielID *id;
     uintmax_t size;
     const char **loc_hints;
     uintmax_t loc_hints_size;
-    const cldvalue *value;
+    cldvalue *value;
 
 } swref;
 
-swref *swref_create( enum swref_type type, const char *ref_id, const cldvalue *value, uintmax_t size, const char *loc_hint );
-void swref_fatal_merge( swref *receiver, swref *sender );
-void swref_free( swref *ref );
 
-cJSON *swref_serialize( const swref *ref );
-swref *swref_deserialize( cJSON* json );
+swref *      swref_create( enum swref_type type, const char *id, cldvalue *value, uintmax_t size, const char *loc_hint );
+void         swref_fatal_merge( swref *receiver, swref *sender );
+void         swref_free( swref *ref );
+
+cJSON *      swref_serialize( const swref * const ref );
+swref *      swref_deserialize( cJSON *json );
+
+intmax_t     swref_to_intmax ( const swref *ref );
+double       swref_to_double ( const swref *ref );
+const char * swref_to_string ( const swref *ref );
+
+swref *      swref_at_id( cielID *id );
+cielID *     cielID_of_swref( const swref *ref );
