@@ -7,7 +7,7 @@
 #include "../cldthread.h"
 
 void CloudConsumer(int fd);
-void *CloudProducer(void *_arg);
+cldvalue *CloudProducer(void *_arg);
 
 int main(int argc, char *argv[])
 {
@@ -35,7 +35,7 @@ int main(int argc, char *argv[])
 }
 
 
-void *CloudProducer(void *_arg){
+cldvalue *CloudProducer(void *_arg){
 
     int fd = cldthread_open_result_as_stream();
 
@@ -51,7 +51,7 @@ void *CloudProducer(void *_arg){
         sleep(1);
     }
 
-    return cldthread_exit( cldvalue_none() );
+    return cldvalue_none();
 
 }
 

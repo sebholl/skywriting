@@ -48,10 +48,20 @@
 					<Add option="-g" />
 				</Compiler>
 			</Target>
-			<Target title="wordcount">
-				<Option output="bin/wordcount/wordcount" prefix_auto="1" extension_auto="1" />
+			<Target title="prodcons">
+				<Option output="bin/prodcons/prodcons" prefix_auto="1" extension_auto="1" />
 				<Option working_dir="../../../../" />
-				<Option object_output="obj/wordcount/" />
+				<Option object_output="obj/prodcons/" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-g" />
+				</Compiler>
+			</Target>
+			<Target title="linkedlist">
+				<Option output="bin/linkedlist/linkedlist" prefix_auto="1" extension_auto="1" />
+				<Option working_dir="../../../../" />
+				<Option object_output="obj/linkedlist/" />
 				<Option type="1" />
 				<Option compiler="gcc" />
 				<Compiler>
@@ -61,12 +71,18 @@
 		</Build>
 		<Compiler>
 			<Add option="-Wall" />
+			<Add directory="lib" />
 		</Compiler>
 		<Linker>
 			<Add library="libcr" />
 			<Add library="libssl" />
 			<Add library="libcurl" />
 		</Linker>
+		<Unit filename="_cldptr_table.c">
+			<Option compilerVar="CC" />
+			<Option compile="0" />
+			<Option link="0" />
+		</Unit>
 		<Unit filename="_cldthread.c">
 			<Option compilerVar="CC" />
 			<Option compile="0" />
@@ -81,14 +97,14 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="blcr_interface.h" />
-		<Unit filename="cJSON.c">
-			<Option compilerVar="CC" />
-		</Unit>
-		<Unit filename="cJSON.h" />
 		<Unit filename="cielID.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="cielID.h" />
+		<Unit filename="cldptr.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="cldptr.h" />
 		<Unit filename="cldthread.c">
 			<Option compilerVar="CC" />
 		</Unit>
@@ -97,10 +113,19 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="cldvalue.h" />
-		<Unit filename="curl_helper_functions.c">
+		<Unit filename="common/curl_helper_functions.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="curl_helper_functions.h" />
+		<Unit filename="common/curl_helper_functions.h" />
+		<Unit filename="common/sha_helper_functions.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="common/sha_helper_functions.h" />
+		<Unit filename="lib/cJSON/cJSON.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="lib/cJSON/cJSON.h" />
+		<Unit filename="lib/klib/khash.h" />
 		<Unit filename="sw_interface.c">
 			<Option compilerVar="CC" />
 		</Unit>
@@ -117,6 +142,10 @@
 			<Option compilerVar="CC" />
 			<Option target="helloworld" />
 		</Unit>
+		<Unit filename="tests/linkedlist.c">
+			<Option compilerVar="CC" />
+			<Option target="linkedlist" />
+		</Unit>
 		<Unit filename="tests/pi.c">
 			<Option compilerVar="CC" />
 			<Option target="pi" />
@@ -127,13 +156,14 @@
 			<Option link="0" />
 			<Option target="pi" />
 		</Unit>
-		<Unit filename="tests/sha_stream.c">
+		<Unit filename="tests/prodcons.c">
 			<Option compilerVar="CC" />
-			<Option target="wordcount" />
+			<Option target="prodcons" />
 		</Unit>
 		<Extensions>
 			<code_completion />
 			<debugger />
+			<envvars />
 		</Extensions>
 	</Project>
 </CodeBlocks_project_file>

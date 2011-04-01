@@ -35,7 +35,7 @@ int sw_abort_task( const char *master_url, const char *task_id );
 
 swref *sw_save_data_to_store( const char *worker_loc, const char *id, const void *data, size_t size );
 
-#define sw_save_string_to_store( worker_loc, id, str ) sw_save_data_to_store( worker_loc, id, str, strlen(str) )
+#define sw_save_string_to_store( worker_loc, id, str ) sw_save_data_to_store( (worker_loc), (id), (str), strlen(str) )
 
 swref *sw_move_file_to_store( const char *worker_loc, const char *filepath, const char *id );
 
@@ -67,7 +67,9 @@ char *sw_generate_new_task_id( const char *handler, const char *group_id, const 
 
 char *sw_generate_task_id( const char *handler, const char *group_id, const void* unique_id );
 
-char *sw_generate_output_id( const char *task_id );
+char *sw_generate_suffixed_id( const char *task_id, const char *suffix );
+
+#define sw_generate_output_id( task_id ) sw_generate_suffixed_id( (task_id), "output" )
 
 cJSON *sw_create_json_task_descriptor( const char *new_task_id,
                                        const char *output_task_id,

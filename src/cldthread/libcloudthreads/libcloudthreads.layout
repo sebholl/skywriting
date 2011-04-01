@@ -2,55 +2,55 @@
 <CodeBlocks_layout_file>
 	<ActiveTarget name="fib" />
 	<File name="_cldthread.c" open="1" top="0" tabpos="8">
-		<Cursor position="2034" topLine="70" />
+		<Cursor position="301" topLine="0" />
 	</File>
 	<File name="_sw_interface.c" open="1" top="0" tabpos="7">
-		<Cursor position="7166" topLine="299" />
+		<Cursor position="5012" topLine="200" />
 	</File>
 	<File name="blcr_interface.c" open="1" top="0" tabpos="1">
-		<Cursor position="2568" topLine="26" />
+		<Cursor position="2568" topLine="0" />
 	</File>
-	<File name="cJSON.h" open="1" top="0" tabpos="19">
+	<File name="cJSON.h" open="1" top="0" tabpos="16">
 		<Cursor position="3778" topLine="79" />
 	</File>
-	<File name="cielID.c" open="1" top="0" tabpos="16">
+	<File name="cielID.c" open="1" top="0" tabpos="14">
 		<Cursor position="20" topLine="27" />
 	</File>
-	<File name="cielID.h" open="1" top="0" tabpos="17">
+	<File name="cielID.h" open="1" top="0" tabpos="14">
 		<Cursor position="246" topLine="0" />
 	</File>
 	<File name="cldthread.c" open="1" top="0" tabpos="5">
-		<Cursor position="4208" topLine="178" />
+		<Cursor position="535" topLine="135" />
 	</File>
-	<File name="cldthread.h" open="1" top="1" tabpos="4">
-		<Cursor position="753" topLine="7" />
+	<File name="cldthread.h" open="1" top="0" tabpos="4">
+		<Cursor position="1194" topLine="0" />
 	</File>
-	<File name="cldvalue.c" open="1" top="0" tabpos="6">
-		<Cursor position="1091" topLine="64" />
+	<File name="cldvalue.c" open="1" top="1" tabpos="6">
+		<Cursor position="1848" topLine="0" />
 	</File>
-	<File name="cldvalue.h" open="1" top="0" tabpos="15">
+	<File name="cldvalue.h" open="1" top="0" tabpos="14">
 		<Cursor position="0" topLine="0" />
 	</File>
-	<File name="curl_helper_functions.c" open="1" top="0" tabpos="18">
-		<Cursor position="84" topLine="4" />
+	<File name="curl_helper_functions.c" open="1" top="0" tabpos="15">
+		<Cursor position="768" topLine="1" />
 	</File>
 	<File name="sw_interface.c" open="1" top="0" tabpos="2">
-		<Cursor position="8077" topLine="315" />
+		<Cursor position="12498" topLine="194" />
 	</File>
 	<File name="sw_interface.h" open="1" top="0" tabpos="9">
 		<Cursor position="1134" topLine="21" />
 	</File>
 	<File name="swref.c" open="1" top="0" tabpos="10">
-		<Cursor position="6298" topLine="216" />
+		<Cursor position="5703" topLine="0" />
 	</File>
 	<File name="swref.h" open="1" top="0" tabpos="11">
-		<Cursor position="1585" topLine="22" />
+		<Cursor position="1422" topLine="23" />
 	</File>
 	<File name="tests/fib.c" open="1" top="0" tabpos="12">
-		<Cursor position="1395" topLine="36" />
+		<Cursor position="1395" topLine="35" />
 	</File>
 	<File name="tests/helloworld.c" open="1" top="0" tabpos="3">
-		<Cursor position="327" topLine="25" />
+		<Cursor position="327" topLine="0" />
 	</File>
 	<File name="tests/pi.c" open="1" top="0" tabpos="13">
 		<Cursor position="0" topLine="0" />

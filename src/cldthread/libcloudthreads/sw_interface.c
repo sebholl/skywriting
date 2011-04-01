@@ -9,7 +9,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "curl_helper_functions.h"
+#include "common/curl_helper_functions.h"
 
 #include "sw_interface.h"
 
@@ -22,11 +22,11 @@ int sw_init( void ){
 }
 
 
-int sw_spawntask( const char *new_task_id,
-                  const char *output_task_id,
-                  const char *parent_task_id,
-                  const char *handler,
-                  cJSON *jsonenc_dependencies,
+int sw_spawntask( const char *const new_task_id,
+                  const char *const output_task_id,
+                  const char *const parent_task_id,
+                  const char *const handler,
+                  cJSON *const jsonenc_dependencies,
                   int const is_continuation ){
 
     struct MemoryStruct postdata;
@@ -94,7 +94,7 @@ int sw_spawntask( const char *new_task_id,
 
 }
 
-int sw_publish_ref( const char *master_loc, const char *task_id, const swref *ref ){
+int sw_publish_ref( const char *const master_loc, const char *const task_id, const swref *const ref ){
 
     char *post_url;
 
@@ -150,7 +150,7 @@ int sw_publish_ref( const char *master_loc, const char *task_id, const swref *re
 
 #if ALLOW_NONDETERMINISM
 
-cJSON *sw_query_info_for_output_id( const char *output_id ){
+cJSON *sw_query_info_for_output_id( const char *const output_id ){
 
     cJSON *result = NULL;
 
@@ -189,7 +189,7 @@ cJSON *sw_query_info_for_output_id( const char *output_id ){
 
 
 
-int sw_abort_task( const char *master_loc, const char *task_id ){
+int sw_abort_task( const char *const master_loc, const char *const task_id ){
 
     char *post_url;
 
@@ -200,7 +200,7 @@ int sw_abort_task( const char *master_loc, const char *task_id ){
 
     curl_easy_setopt( handle, CURLOPT_FAILONERROR, 1 );
 
-    #if VERBOSE
+    #if VERBOSE || DEBUG
     printf("Attempting to abort task \"%s\".\n", task_id );
     curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
     #endif
@@ -220,7 +220,7 @@ int sw_abort_task( const char *master_loc, const char *task_id ){
 
 #endif
 
-char *sw_generate_block_store_path( const char *id ){
+char *sw_generate_block_store_path( const char *const id ){
 
     char *result;
 
@@ -236,7 +236,7 @@ char *sw_generate_block_store_path( const char *id ){
 
 }
 
-static char *_sw_get_filename( const char * const id ){
+static char *_sw_get_filename( const char *const id ){
 
     char *result, *envname;
 
@@ -255,8 +255,8 @@ int sw_open_fd_for_id( const char *id ){
 
     if(path != NULL){
 
-        #if VERBOSE
-        printf( "Opening %s from path \"%s\".\n", id, path );
+        #if VERBOSE || DEBUG
+        printf( "sw_open_fd_for_id(): opening %s from path \"%s\".\n", id, path );
         #endif
 
         result = open( path, O_RDONLY );
@@ -264,8 +264,8 @@ int sw_open_fd_for_id( const char *id ){
 
     } else {
 
-        #if VERBOSE
-        printf( "No path value for ref \"%s\".\n", id );
+        #if DEBUG
+        fprintf( stderr, "sw_open_fd_for_id(): no path value for id \"%s\".\n", id );
         #endif
 
     }
@@ -274,14 +274,14 @@ int sw_open_fd_for_id( const char *id ){
 
 }
 
-char *sw_dump_id( const char *id, size_t * const size_out ){
+char *sw_dump_id( const char *const id, size_t *const size_out ){
 
     char *result = NULL;
 
     int fd = sw_open_fd_for_id( id );
 
     #if VERBOSE
-    printf("Attempting to dump fd (%d) for id (%s)\n", fd, id );
+    printf("sw_dump_id(): attempting to dump fd (%d) for id (%s)\n", fd, id );
     #endif
 
     if( fd >= 0 ){
@@ -350,8 +350,6 @@ char *sw_dump_id( const char *id, size_t * const size_out ){
 
     }
 
-
-
     #if VERBOSE
     printf("::: ID content result: %p\n", result );
     #endif
@@ -362,7 +360,7 @@ char *sw_dump_id( const char *id, size_t * const size_out ){
 
 
 
-swref *sw_move_file_to_store( const char *worker_url, const char *filepath, const char *id ){
+swref *sw_move_file_to_store( const char *const worker_url, const char *const filepath, const char *const id ){
 
     swref *result = NULL;
 
@@ -372,12 +370,15 @@ swref *sw_move_file_to_store( const char *worker_url, const char *filepath, cons
 
         struct stat buf;
 
-        if( stat( filepath, &buf )==-1 ){
+        if( stat( filepath, &buf ) == -1 ){
+
             fprintf( stderr, "sw_move_file_to_worker(): Error retrieving file properties" );
+
             return NULL;
+
         }
 
-        if(_sw_move_to_block_store( filepath, _id )){
+        if( _sw_move_to_block_store( filepath, _id ) != 0 ){
 
             result = swref_create( CONCRETE, _id, NULL, buf.st_size, sw_get_current_worker_loc() );
 
@@ -401,7 +402,7 @@ swref *sw_move_file_to_store( const char *worker_url, const char *filepath, cons
 }
 
 
-swref *sw_save_data_to_store( const char *worker_loc, const char *id, const void *data, size_t size ){
+swref *sw_save_data_to_store( const char *const worker_loc, const char *const id, const void *const data, const size_t size ){
 
     swref *result = NULL;
 
@@ -440,7 +441,7 @@ swref *sw_save_data_to_store( const char *worker_loc, const char *id, const void
 
 }
 
-char *sw_generate_new_task_id( const char *handler, const char *group_id, const char *desc ){
+char *sw_generate_new_task_id( const char *const handler, const char *const group_id, const char *const desc ){
 
     static int _count = 0;
 
@@ -449,40 +450,39 @@ char *sw_generate_new_task_id( const char *handler, const char *group_id, const 
 
     len = asprintf( &str, "%s:%s:%d:%s", handler, group_id, ++_count, desc );
 
-    //str = _sha1_hex_digest_from_bytes( str, len, 1 );
+    str = sha1_hex_digest_from_bytes( str, len, 1 );
 
     return str;
 
 }
 
 
-char *sw_generate_task_id( const char *handler, const char *group_id, const void* const unique_id ){
+char *sw_generate_task_id( const char *const handler, const char *const group_id, const void *const unique_id ){
 
     char *str;
     int len;
 
     len = asprintf( &str, "%s:%s:%p", handler, group_id, unique_id );
 
-    //str = _sha1_hex_digest_from_bytes( str, len, 1 );
+    str = sha1_hex_digest_from_bytes( str, len, 1 );
 
     return str;
 
 }
 
 
-
-char *sw_generate_output_id( const char *task_id ){
+char *sw_generate_suffixed_id( const char *const task_id, const char *const suffix ){
 
     char *result;
 
-    asprintf( &result, "%s:output", task_id );
+    asprintf( &result, "%s:%s", task_id, suffix );
 
     return result;
 
 }
 
 
-inline int sw_set_current_task_id( const char *taskid ){
+inline int sw_set_current_task_id( const char *const taskid ){
     return ( setenv( "CL_TASK_ID", taskid, 1 ) == 0 );
 }
 
@@ -513,11 +513,11 @@ inline const char* sw_get_block_store_path( void ){
 }
 
 
-cJSON *sw_create_json_task_descriptor( const char *new_task_id,
-                                       const char *output_task_id,
-                                       const char *current_task_id,
-                                       const char *handler,
-                                       cJSON *jsonenc_dependencies,
+cJSON *sw_create_json_task_descriptor( const char *const new_task_id,
+                                       const char *const output_task_id,
+                                       const char *const current_task_id,
+                                       const char *const handler,
+                                       cJSON *const jsonenc_dependencies,
                                        int const is_continuation ){
 
     cJSON *result = cJSON_CreateObject();
@@ -525,7 +525,7 @@ cJSON *sw_create_json_task_descriptor( const char *new_task_id,
     cJSON_AddStringToObject( result, "task_id", new_task_id );
     cJSON_AddStringToObject( result, "handler", handler );
     cJSON_AddItemReferenceToObject( result, "dependencies", jsonenc_dependencies );
-    cJSON_AddItemToObject( result, "expected_outputs", cJSON_CreateStringArray( &output_task_id, 1 ) );
+    cJSON_AddItemToObject( result, "expected_outputs", cJSON_CreateStringArray( (const char **)&output_task_id, 1 ) );
     cJSON_AddStringToObject( result, (is_continuation ? "continues_task" : "parent" ), current_task_id );
 
     return result;

@@ -8,7 +8,7 @@
 
 /* MemoryWrite example taken from http://curl.haxx.se/libcurl/c/getinmemory.html */
 
-size_t WriteMemoryCallback(void *ptr, size_t size, size_t nmemb, void *data){
+size_t WriteMemoryCallback(void *const ptr, size_t const size, size_t const nmemb, void *const data){
 
     size_t realsize = size * nmemb;
     struct MemoryStruct *mem = (struct MemoryStruct *)data;
@@ -30,7 +30,7 @@ size_t WriteMemoryCallback(void *ptr, size_t size, size_t nmemb, void *data){
 }
 
 
-size_t ReadMemoryCallback(void *ptr, size_t size, size_t nmemb, void *data){
+size_t ReadMemoryCallback(void *const ptr, size_t const size, size_t const nmemb, void *const data){
 
     size_t bytecount = size * nmemb;
     struct MemoryStruct *mem = (struct MemoryStruct *)data;
@@ -44,3 +44,4 @@ size_t ReadMemoryCallback(void *ptr, size_t size, size_t nmemb, void *data){
     return bytecount;
 
 }
+

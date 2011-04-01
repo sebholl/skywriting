@@ -2,7 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "cJSON.h"
+#include <cJSON/cJSON.h>
+
 #include "swref.h"
 
 #include "cldthread.h"
@@ -16,11 +17,12 @@ static cldvalue *_result = NULL;
 int cldthread_init( void ){
 
     if(_result==NULL) _result = cldvalue_none();
+    _cldthread_set_task_id( sw_get_current_task_id() );
     return blcr_init_framework() && sw_init();
 
 }
 
-cldthread *cldthread_smart_create( void *(*fptr)(void *), void *arg0, char *group_id ){
+cldthread *cldthread_smart_create( cldvalue *(*const fptr)(void *), void *const arg0, char *const group_id ){
 
     char *path;
 
@@ -47,38 +49,6 @@ cldthread *cldthread_smart_create( void *(*fptr)(void *), void *arg0, char *grou
 
     thread_output_id = sw_generate_output_id( thread_task_id );
 
-    /* NON-DETERMINISTIC
-    if(group_id != NULL){
-
-        cJSON *info = sw_query_info_for_output_id( thread_output_id );
-
-        if( info != NULL ){
-
-            cJSON *task, *task_id, *ref;
-
-            if( ((task = cJSON_GetObjectItem( info, "task" ))!=NULL) &&
-                ((task_id = cJSON_GetObjectItem( task, "task_id" ))!=NULL) &&
-                ((ref = cJSON_GetObjectItem( info, "ref" ))!=NULL) ){
-
-                result = _create_cldthread_object();
-                result->task_id = strdup( task_id->valuestring );
-                result->output_ref = swref_deserialize( ref );
-                result->result = NULL;
-
-                free( thread_task_id );
-                free( thread_output_id );
-
-            }
-
-            cJSON_Delete(info);
-
-            if( result != NULL ) return result;
-
-        }
-
-    }
-
-    */
     asprintf( &path, "/tmp/%s.%s.checkpoint.thread", sw_get_current_task_id(), thread_task_id );
 
     if( _cldthread_task_checkpoint( thread_task_id, NULL, path, fptr, arg0 ) ){
@@ -149,13 +119,13 @@ size_t cldthread_joins( cielID *id[], size_t const count ){
 
     for( i = 0; i < count; i++ ){
 
-        #if VERBOSE
-        printf("Attempting to open stream (%s)\n", id[i]->id_str );
+        #if DEBUG
+        printf("cldthread_joins(): attempting to open stream (%s)\n", id[i]->id_str );
         #endif
 
         if( cielID_read_stream(id[i]) < 0 ){
 
-            if(_cldthread_continuation_for_inputs( &id[i], (count - i) ) >= 0) break;
+            if(_cldthread_continuation_for_inputs( id, count ) >= 0) break;
             i--;
 
         }
@@ -180,13 +150,10 @@ int cldthread_open_result_as_stream( void ){
 }
 
 
-
-void *cldthread_exit( cldvalue *const result ){
-    _cldthread_submit_output( result, NULL );
-    exit(EXIT_SUCCESS);
+int cldapp_exit( cldvalue *const result ){
+    _cldthread_submit_output( result );
     return 0;
 }
-
 
 
 intmax_t cldthread_result_as_intmax( cldthread *const thread ){
@@ -225,3 +192,14 @@ const char *cldthread_result_as_string( cldthread *const thread ){
 
 }
 
+cldptr cldthread_result_as_cldptr( cldthread *const thread ){
+
+    swref *ref = swref_at_id( thread );
+    cielID_close_stream( thread );
+
+    const cldptr result = swref_to_cldptr( ref );
+    swref_free( ref );
+
+    return result;
+
+}

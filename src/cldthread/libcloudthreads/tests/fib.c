@@ -5,10 +5,9 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "../sw_interface.h"
 #include "../cldthread.h"
 
-void *Fib(void *_index);
+cldvalue *Fib(void *_index);
 
 char *_group_id;
 
@@ -35,7 +34,7 @@ int main(int argc, char *argv[])
 }
 
 
-void *Fib(void *_index){
+cldvalue *Fib(void *_index){
 
     uintmax_t result;
     const int index = (int)_index;
@@ -64,6 +63,6 @@ void *Fib(void *_index){
         }
     }
 
-    printf("--> Exiting Fib(%d) with result of %ld...\n", index, (long)result );
-    return cldthread_exit( cldvalue_integer(result) );
+    printf("--> Exiting Fib(%d) with result of %" PRIuMAX "...\n", index, result );
+    return cldvalue_integer(result);
 }

@@ -1,31 +1,9 @@
-#include <openssl/sha.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <pthread.h>
 
+#include "common/sha_helper_functions.h"
 
-static char *_sha1_hex_digest_from_bytes( const char *bytes, unsigned int len, int shouldFreeInput ){
-
-    char *result;
-    int hexlen, i;
-
-    unsigned char hash[SHA_DIGEST_LENGTH];
-
-    SHA1( (unsigned char *)bytes, len, hash );
-
-    hexlen = ((SHA_DIGEST_LENGTH << 1) +1 );
-    result = malloc( hexlen*sizeof(char) );
-
-    for (i = 0; i < SHA_DIGEST_LENGTH; i++) sprintf( &result[i<<1], "%02x", hash[i]);
-
-    if(shouldFreeInput) free( (char *)bytes );
-
-    return result;
-
-}
-
-
-static char *_sw_generate_temp_path( const char *id ){
+static char *_sw_generate_temp_path( const char *const id ){
 
     char *result;
 
@@ -34,7 +12,7 @@ static char *_sw_generate_temp_path( const char *id ){
 
     len = asprintf( &tmp, "%s.%s", sw_get_current_task_id(), id );
 
-    tmp = _sha1_hex_digest_from_bytes( tmp, len, 1 );
+    tmp = sha1_hex_digest_from_bytes( tmp, len, 1 );
 
     asprintf( &result, "/tmp/cldthread.%s", tmp );
 
@@ -45,7 +23,10 @@ static char *_sw_generate_temp_path( const char *id ){
 }
 
 
-static swref *_sw_post_data_to_worker( const char *worker_loc, const char *id, const void *data, size_t size ){
+static swref *_sw_post_data_to_worker( const char *const worker_loc,
+                                       const char *const id,
+                                       const void *const data,
+                                       size_t const size ){
 
     struct MemoryStruct post_data;
 
@@ -106,7 +87,7 @@ static swref *_sw_post_data_to_worker( const char *worker_loc, const char *id, c
 
 }
 
-static int _sw_move_to_block_store( const char *filepath, const char *id ){
+static int _sw_move_to_block_store( const char *const filepath, const char *const id ){
 
     int result = 0;
     char *bpath = sw_generate_block_store_path( id );
@@ -123,7 +104,7 @@ static int _sw_move_to_block_store( const char *filepath, const char *id ){
 }
 
 
-static swref *_sw_write_block_store( const char *id, const void *data, size_t size ){
+static swref *_sw_write_block_store( const char *const id, const void *const data, size_t const size ){
 
     int proceed;
     char *tmppath = _sw_generate_temp_path( id );
@@ -151,142 +132,8 @@ static swref *_sw_write_block_store( const char *id, const void *data, size_t si
 
 }
 
-/*
-static char *_sw_get_data_through_http( const swref *ref, size_t *size_out ){
 
-    CURLcode result;
-
-    size_t i;
-    CURL *handle;
-    const char *loc_hint;
-
-    struct MemoryStruct data = { NULL, 0, 0 };
-
-    handle = curl_easy_init();
-
-    curl_easy_setopt( handle, CURLOPT_FAILONERROR, 1 );
-
-    #if VERBOSE
-    curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
-    #endif
-
-    curl_easy_setopt( handle, CURLOPT_WRITEFUNCTION, &WriteMemoryCallback );
-    curl_easy_setopt( handle, CURLOPT_WRITEDATA, &data );
-
-    for( loc_hint = ref->loc_hints[0]; (loc_hint != NULL) && (i < ref->loc_hints_size); loc_hint = ref->loc_hints[++i] ){
-
-        char *url;
-
-        asprintf( &url, "http://%s/data/%s/", loc_hint, ref->ref_id );
-
-        #if VERBOSE
-        printf("Retrieving data from \"%s\".\n", url );
-        #endif
-
-        curl_easy_setopt( handle, CURLOPT_URL, url );
-        free( url );
-
-        result = curl_easy_perform( handle );
-
-        if(result!=CURLE_OK){
-
-            #if VERBOSE
-            printf( "sw_get_data_through_http(): error during download: %s\n", curl_easy_strerror(result) );
-            #endif
-
-            if(data.size != 0){
-                free(data.memory);
-                data.size = 0;
-                data.memory = NULL;
-            }
-
-            continue;
-
-        }
-
-        break;
-
-    }
-
-    curl_easy_cleanup( handle );
-
-    if( size_out != NULL ) *size_out = data.size;
-    return data.memory;
-
-}
-
-static void *_sw_stream_data_through_http( void *args ){
-
-    int result = 0;
-
-    const swref *ref = (const swref *)((void **)args)[0];
-    const int fd = (int)((void **)args)[1];
-
-    FILE* fp = fdopen( fd, "a" );
-
-    if( fp >= 0 ){
-
-        CURL *handle;
-        char *url;
-
-        const char *loc_hint;
-
-        size_t i;
-
-        handle = curl_easy_init();
-
-        curl_easy_setopt( handle, CURLOPT_FAILONERROR, 1 );
-
-        #if VERBOSE
-        curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
-        #endif
-
-        curl_easy_setopt( handle, CURLOPT_WRITEDATA, fp );
-
-        for( loc_hint = ref->loc_hints[0]; (loc_hint != NULL) && (i < ref->loc_hints_size); loc_hint = ref->loc_hints[++i] ){
-
-            asprintf( &url, "http://%s/data/%s/", loc_hint, ref->ref_id );
-
-            #if VERBOSE
-            printf("Retrieving data from \"%s\".\n", url );
-            #endif
-
-            curl_easy_setopt( handle, CURLOPT_URL, url );
-            free( url );
-
-            if( curl_easy_perform( handle ) != CURLE_OK ) continue;
-
-            result = 1;
-
-            break;
-
-        }
-
-        curl_easy_cleanup( handle );
-
-        fclose(fp);
-
-    }
-
-    return (void *)result;
-
-}
-
-
-static int _sw_async_stream_data_through_http( const swref *ref, const char *fifo_path ){
-
-    pthread_t pthread;
-    void *args[2];
-
-    args[0] = (void *)ref;
-    args[1] = (void *)open( fifo_path, O_WRONLY | O_CREAT | O_APPEND );
-
-    return (pthread_create(&pthread, NULL, _sw_stream_data_through_http, args) == 0);
-
-}
-*/
-
-static swref *_sw_post_file_to_worker( const char *worker_loc, const char *filepath ){
+static swref *_sw_post_file_to_worker( const char *const worker_loc, const char *const filepath ){
 
     char *post_url;
     char *id;
@@ -350,9 +197,9 @@ static swref *_sw_post_file_to_worker( const char *worker_loc, const char *filep
 
     fclose( fp );
 
-    if(result!=CURLE_OK){
+    if( result != CURLE_OK ){
 
-        printf( "sw_post_file_to_worker(): error during upload: %s\n", curl_easy_strerror(result) );
+        fprintf( stderr, "sw_post_file_to_worker(): error during upload: %s\n", curl_easy_strerror(result) );
         if( id!=NULL) free( id );
         return NULL;
 

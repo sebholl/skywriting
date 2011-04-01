@@ -5,7 +5,7 @@
 #include "sw_interface.h"
 #include "swref.h"
 
-swref *swref_create( enum swref_type type, const char *id, cldvalue *value, uintmax_t size, const char *loc_hint ){
+swref *swref_create( enum swref_type type, const char *const id, cldvalue *const value, uintmax_t size, const char *const loc_hint ){
 
     swref *result = calloc( 1, sizeof(swref) );
 
@@ -40,16 +40,16 @@ void swref_fatal_merge( swref *const receiver, swref *const sender ){
 
 }
 
-void swref_free( swref *ref ){
+void swref_free( swref *const ref ){
 
-    if(ref!=NULL){
+    if( ref != NULL ){
 
-        if(ref->loc_hints != NULL){
+        if( ref->loc_hints != NULL ){
             int i = 0;
 
             const char *hint;
             for( hint = ref->loc_hints[i]; (hint != NULL) && (i < ref->loc_hints_size); hint = ref->loc_hints[++i] ){
-                free((char *)hint);
+                free( (char *)hint );
             }
 
             free(ref->loc_hints);
@@ -57,7 +57,7 @@ void swref_free( swref *ref ){
         }
 
         cielID_free( ref->id );
-        free((swref *)ref);
+        free( (swref *)ref );
 
     }
 
@@ -83,24 +83,8 @@ cJSON *swref_serialize( const swref *const ref ){
             case DATA:
             {
                 const cldvalue* val = ref->value;
-                if(val!=NULL){
+                cJSON_AddItemToArray( array, val != NULL ? cldvalue_to_json( val ) : cJSON_CreateNull() );
 
-                    switch(val->type){
-                        case INTEGER:
-                            cJSON_AddItemToArray( array, cJSON_CreateNumber( val->value.integer ) );
-                            break;
-                        case REAL:
-                            cJSON_AddItemToArray( array, cJSON_CreateNumber( val->value.real ) );
-                            break;
-                        case STRING:
-                            cJSON_AddItemToArray( array, cJSON_CreateString( val->value.string ) );
-                            break;
-                        default:
-                            cJSON_AddItemToArray( array, cJSON_CreateNull() );
-                            break;
-                    }
-
-                }
             }
                 break;
             case CONCRETE:
@@ -127,7 +111,7 @@ cJSON *swref_serialize( const swref *const ref ){
 
 }
 
-swref *swref_at_id( cielID *id ){
+swref *swref_at_id( cielID *const id ){
 
     swref* result = NULL;
 
@@ -228,20 +212,31 @@ swref *swref_deserialize( cJSON *json ){
 
 
 
-inline intmax_t swref_to_intmax( const swref *ref ){
-    if( ref->type != DATA || ref->value->type != INTEGER ) fprintf(stderr,"cldvalue invalid cast\n");
+intmax_t swref_to_intmax( const swref *const ref ){
+    if( ref->type != DATA || ref->value->type != INTEGER ) fprintf(stderr,"swref %p invalid cast to int\n", ref);
     return ref->value->value.integer;
 }
 
-inline double swref_to_double( const swref *ref ){
-    if( ref->type != DATA || ref->value->type != REAL ) fprintf(stderr,"cldvalue invalid cast\n");
+double swref_to_double( const swref *const ref ){
+    if( ref->type != DATA || ref->value->type != REAL ) fprintf(stderr,"swref %p invalid cast to double\n", ref);
     return (double)ref->value->value.real;
 }
 
-inline const char * swref_to_string( const swref *ref ){
-    if( ref->type != DATA || ref->value->type != STRING ) fprintf(stderr,"cldvalue invalid cast\n");
+const char * swref_to_string( const swref *const ref ){
+    if( ref->type != DATA || ref->value->type != STRING ) fprintf(stderr,"swref %p invalid cast to string\n", ref);
     return ref->value->value.string;
 }
+
+cldptr swref_to_cldptr( const swref *const ref ){
+    if( ref->type != DATA || ref->value->type != CLDPTR ) fprintf(stderr,"swref %p invalid cast to cldptr\n", ref);
+    return ref->value->value.ptr;
+}
+
+char * swref_to_data( const swref *const ref, size_t *const size_out ){
+    if( ref->type != CONCRETE || ref->size > 0 ) fprintf(stderr,"swref %p invalid cast to data\n", ref);
+    return cielID_dump_stream( ref->id, size_out );
+}
+
 
 inline cielID * cielID_of_swref( const swref *ref ){
     return ref->id;

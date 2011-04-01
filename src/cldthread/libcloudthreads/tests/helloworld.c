@@ -6,7 +6,7 @@
 
 #include "../cldthread.h"
 
-void *my_thread();
+cldvalue *my_thread();
 
 int main(int argc, char *argv[])
 {
@@ -46,18 +46,18 @@ int main(int argc, char *argv[])
 }
 
 
-void *my_thread(int thread_id)
+cldvalue *my_thread(int thread_id)
 {
     char *ret_value;
 
     int count = 1;
     printf( "Thread ID %d\n", thread_id );
-    while(count <= 10){
+    while(count <= 5){
         printf( "%d: Hello World!\n", count++ );
         sleep(1);
     }
 
     asprintf( &ret_value, "I've finished! (Thread ID: %d)", thread_id );
 
-    return cldthread_exit( cldvalue_string( ret_value ) );
+    return cldvalue_string( ret_value );
 }

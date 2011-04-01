@@ -3,9 +3,12 @@
 #pragma once
 
 #include <stdint.h>
+#include <cJSON/cJSON.h>
+
 #include "cldvalue.h"
-#include "cJSON.h"
 #include "cielID.h"
+
+#define MAX_
 
 static const char *const swref_map_type_tuple_id[] = { "err",
                                           "f2",
@@ -40,16 +43,18 @@ typedef struct swref {
 } swref;
 
 
-swref *      swref_create( enum swref_type type, const char *id, cldvalue *value, uintmax_t size, const char *loc_hint );
-void         swref_fatal_merge( swref *receiver, swref *sender );
-void         swref_free( swref *ref );
+swref *        swref_create( enum swref_type type, const char *id, cldvalue *value, uintmax_t size, const char *loc_hint );
+void           swref_fatal_merge( swref *receiver, swref *sender );
+void           swref_free( swref *ref );
 
-cJSON *      swref_serialize( const swref * const ref );
-swref *      swref_deserialize( cJSON *json );
+cJSON *        swref_serialize( const swref *ref );
+swref *        swref_deserialize( cJSON *json );
 
-intmax_t     swref_to_intmax ( const swref *ref );
-double       swref_to_double ( const swref *ref );
-const char * swref_to_string ( const swref *ref );
+intmax_t       swref_to_intmax ( const swref *ref );
+double         swref_to_double ( const swref *ref );
+const char *   swref_to_string ( const swref *ref );
+cldptr         swref_to_cldptr ( const swref *ref );
+char *         swref_to_data   ( const swref *ref, size_t *size_out );
 
-swref *      swref_at_id( cielID *id );
-cielID *     cielID_of_swref( const swref *ref );
+swref *        swref_at_id( cielID *id );
+cielID *       cielID_of_swref( const swref *ref );

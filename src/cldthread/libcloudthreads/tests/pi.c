@@ -14,7 +14,7 @@ int main(int argc, char *argv[])
 {
     int numSamples, numSurveys;
 
-    if(argc==3 && sscanf( argv[1], "%d", &numSamples ) && sscanf( argv[2], "%d", &numSurveys )){
+    if( (argc==3) && sscanf( argv[1], "%d", &numSamples ) && sscanf( argv[2], "%d", &numSurveys )){
 
         double result;
 
@@ -35,7 +35,7 @@ int main(int argc, char *argv[])
 }
 
 
-void *Pi_Mapper(void *_arg){
+cldvalue *Pi_Mapper(void *_arg){
 
     int i = 0L;
     int counts[] = {0L, 0L};
@@ -63,7 +63,7 @@ void *Pi_Mapper(void *_arg){
 
     }
 
-    return cldthread_exit( cldvalue_integer(counts[0]) );
+    return cldvalue_integer( counts[0] );
 }
 
 

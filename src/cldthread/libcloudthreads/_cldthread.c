@@ -1,6 +1,7 @@
 #include <stdio.h>
 
-#include "curl_helper_functions.h"
+#include "common/curl_helper_functions.h"
+#include "cldptr.h"
 
 #include "blcr_interface.h"
 #include "sw_interface.h"
@@ -11,11 +12,12 @@ static inline cldthread *_create_cldthread_object(){
     return calloc( 1, sizeof( cldthread ) );
 }
 
-static inline void _strip_new_line( char *string ){
+static inline void _strip_new_line( char *const string ){
     char *tmp;
     if ((tmp = strchr(string, '\n'))!=NULL) *tmp = 0;
 }
 
+static const cielID *_current_heapID = NULL;
 
 static cielID **_input_id = NULL;
 static size_t _input_id_count;
@@ -73,11 +75,33 @@ static void _cldthread_update_env( void ){
 
 static cielID *_outputstream = NULL;
 
-static void _cldthread_submit_output( cldvalue *value, void *output ){
+static void _cldthread_submit_output( cldvalue *const value ){
 
-    if ( _outputstream == NULL ){
+    /* First of all, publish our shared memory heap */
 
-        swref* data = swref_create( DATA, sw_get_current_output_id(), value, 0, NULL );
+    size_t heap_size;
+    const void *const heap_data = cldptr_get_heap( &heap_size );
+
+    if( heap_size > 0 ){
+        sw_publish_ref( sw_get_master_loc(),
+                        sw_get_current_task_id(),
+                        sw_save_data_to_store( NULL, _current_heapID->id_str, heap_data, heap_size ) );
+    }
+
+
+    /* And then once we know the heap is available, publish our output */
+
+    if( _outputstream != NULL ){
+
+        cielID_finalize_stream( _outputstream );
+
+        cielID_free( _outputstream );
+
+        _outputstream = NULL;
+
+    } else {
+
+        swref *data = swref_create( DATA, sw_get_current_output_id(), value, 0, NULL );
 
         cJSON *json = swref_serialize( data );
 
@@ -91,32 +115,33 @@ static void _cldthread_submit_output( cldvalue *value, void *output ){
 
         free( tmp );
 
-    } else {
-
-        cielID_finalize_stream( _outputstream );
-        cielID_free( _outputstream );
-        _outputstream = NULL;
-
     }
 
 }
 
+static void _cldthread_set_task_id( const char *new_id ){
 
+    char *heap_idstr = sw_generate_suffixed_id( sw_get_current_task_id(), "heap" );
 
+    _current_heapID = cldptr_reset_heap( heap_idstr );
 
-static int _cldthread_task_checkpoint( const char *resume_task_id,
-                                    const char *continuation_task_id,
-                                    const char *filepath,
-                                    void *(*fptr)(void *),
-                                    void *const fptr_arg ){
+    free( heap_idstr );
+
+    sw_set_current_task_id( new_id );
+
+}
+
+static int _cldthread_task_checkpoint( const char *const resume_task_id,
+                                       const char *const continuation_task_id,
+                                       const char *const filepath,
+                                       cldvalue *(*const fptr)(void *),
+                                       void       *const fptr_arg               ){
 
     int result;
 
-    char *old_task_id;
+    char *old_task_id = strdup( sw_get_current_task_id() ) ;
 
-    old_task_id = strdup( sw_get_current_task_id() ) ;
-
-    sw_set_current_task_id( resume_task_id );
+    _cldthread_set_task_id( resume_task_id );
 
     result = blcr_checkpoint( filepath );
 
@@ -133,7 +158,7 @@ static int _cldthread_task_checkpoint( const char *resume_task_id,
 
         if( fptr != NULL ){
 
-            _cldthread_submit_output( cldvalue_none(), fptr( fptr_arg ) );
+            _cldthread_submit_output( fptr( fptr_arg ) );
             exit( EXIT_SUCCESS );
 
         }
@@ -156,7 +181,6 @@ static int _cldthread_task_checkpoint( const char *resume_task_id,
 }
 
 
-
 static int _cldthread_continuation_for_inputs( cielID *input_id[], size_t input_count ){
 
     int result;
@@ -166,6 +190,7 @@ static int _cldthread_continuation_for_inputs( cielID *input_id[], size_t input_
     char *cont_task_id;
 
     /* Create a task ID for the new continuation task */
+
     cont_task_id = sw_generate_new_task_id( "cldthread", sw_get_current_task_id(), "cont" );
 
     asprintf( &path, "/tmp/%s.checkpoint.continuation", sw_get_current_task_id() );

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdlib.h>
+
 typedef struct cielID {
 
    char *id_str;
@@ -11,6 +13,7 @@ typedef struct cielID {
 /* General API */
 
 cielID *cielID_create( const char *id_str );
+cielID *cielID_create2( char *id_str );
 
 void cielID_free( cielID *id );
 
@@ -19,7 +22,7 @@ void cielID_free( cielID *id );
 
 int cielID_read_stream( cielID *id );
 
-char *cielID_dump_stream( cielID *id, size_t * const size_out );
+char *cielID_dump_stream( cielID *id, size_t *size_out );
 
 void cielID_close_stream( cielID *id );
 

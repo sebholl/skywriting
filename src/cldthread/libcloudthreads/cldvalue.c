@@ -9,36 +9,65 @@ cldvalue *cldvalue_none( void ){
     cldvalue *result = malloc( sizeof(cldvalue) );
     result->type = NONE;
     result->value.integer = 0;
-    result->size = 0;
     return result;
 }
 
-cldvalue *cldvalue_integer( intmax_t intgr ){
+cldvalue *cldvalue_integer( intmax_t const intgr ){
     cldvalue *result = malloc( sizeof(cldvalue) );
     result->type = INTEGER;
     result->value.integer = intgr;
-    result->size = 0;
     return result;
 }
 
-cldvalue *cldvalue_real( long double dbl ){
+cldvalue *cldvalue_real( long double const dbl ){
     cldvalue *result = malloc( sizeof(cldvalue) );
     result->type = REAL;
     result->value.real = dbl;
-    result->size = 0;
     return result;
 }
 
-cldvalue *cldvalue_string( const char *str ){
+cldvalue *cldvalue_string( const char *const str ){
     cldvalue *result = malloc( sizeof(cldvalue) );
     result->type = STRING;
     result->value.string = strdup( str );
-    result->size = 0;
+    return result;
+}
+
+cldvalue *cldvalue_ptr( const cldptr ptr ){
+    cldvalue *result = malloc( sizeof(cldvalue) );
+    result->type = CLDPTR;
+    result->value.ptr = ptr;
     return result;
 }
 
 
-cldvalue *cldvalue_from_json( cJSON *json ){
+cJSON *cldvalue_to_json( const cldvalue *const val ){
+
+    cJSON *result = NULL;
+
+    switch(val->type){
+        case INTEGER:
+            result = cJSON_CreateNumber( val->value.integer );
+            break;
+        case REAL:
+            result = cJSON_CreateNumber( val->value.real );
+            break;
+        case STRING:
+            result = cJSON_CreateString( val->value.string );
+            break;
+        case CLDPTR:
+            result = cldptr_to_json( val->value.ptr );
+            break;
+        case NONE:
+            result = cJSON_CreateNull();
+            break;
+    }
+
+    return result;
+
+}
+
+cldvalue *cldvalue_from_json( cJSON *const json ){
 
     cldvalue *result = NULL;
 
@@ -66,6 +95,12 @@ cldvalue *cldvalue_from_json( cJSON *json ){
                 result->value.string = strdup(json->valuestring);
                 break;
 
+            case cJSON_Array:
+            {
+                result->type = CLDPTR;
+                result->value.ptr = cldptr_from_json( json );
+            }
+                break;
             case cJSON_NULL:
                 result->type = NONE;
                 break;
@@ -78,7 +113,7 @@ cldvalue *cldvalue_from_json( cJSON *json ){
 
 }
 
-void cldvalue_free( cldvalue* obj ){
+void cldvalue_free( cldvalue *const obj ){
 
     switch(obj->type){
         case STRING:

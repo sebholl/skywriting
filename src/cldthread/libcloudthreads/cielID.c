@@ -7,14 +7,15 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#include "curl_helper_functions.h"
+#include "common/curl_helper_functions.h"
 #include "sw_interface.h"
 #include "swref.h"
+#include "cldthread.h"
 
 #include "cielID.h"
 
 
-cielID *cielID_create( const char *id_str ){
+cielID * cielID_create( const char *id_str ){
 
     cielID *id = calloc( 1, sizeof( cielID ) );
     id->id_str = strdup(id_str);
@@ -24,9 +25,24 @@ cielID *cielID_create( const char *id_str ){
 
 }
 
+cielID * cielID_create2( char *id_str ){
+
+    cielID *id = calloc( 1, sizeof( cielID ) );
+    id->id_str = id_str;
+    id->fd = -1;
+
+    return id;
+
+}
+
+
 int cielID_read_stream( cielID *id ){
 
-    if(id->fd < 0) id->fd = sw_open_fd_for_id( id->id_str );
+    if(id->fd < 0) {
+
+        id->fd = sw_open_fd_for_id( id->id_str );
+
+    }
 
     return id->fd;
 
@@ -46,9 +62,13 @@ void cielID_close_stream( cielID *id ){
 
 void cielID_free( cielID *id ){
 
-    cielID_close_stream( id );
-    free( id->id_str );
-    free( id );
+    if( id != NULL ){
+
+        cielID_close_stream( id );
+        free( id->id_str );
+        free( id );
+
+    }
 
 }
 
