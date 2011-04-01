@@ -5,20 +5,11 @@
 #include <stdint.h>
 #include <cJSON/cJSON.h>
 
-#include "cldvalue.h"
 #include "cielID.h"
 
-#define MAX_
+#include "cldvalue.h"
 
-static const char *const swref_map_type_tuple_id[] = { "err",
-                                          "f2",
-                                          "c2",
-                                          "s2",
-                                          "t2",
-                                          "fetch2",
-                                          "urls",
-                                          "val",
-                                          "" };
+struct cldvalue;
 
 typedef struct swref {
 
@@ -36,25 +27,39 @@ typedef struct swref {
 
     cielID *id;
     uintmax_t size;
-    const char **loc_hints;
-    uintmax_t loc_hints_size;
-    cldvalue *value;
+    char **loc_hints;
+    size_t loc_hints_size;
+    struct cldvalue *value;
 
 } swref;
 
+static const char *const swref_map_type_tuple_id[] = {    "err",
+                                                          "f2",
+                                                          "c2",
+                                                          "s2",
+                                                          "t2",
+                                                          "fetch2",
+                                                          "urls",
+                                                          "val",
+                                                          "" };
 
-swref *        swref_create( enum swref_type type, const char *id, cldvalue *value, uintmax_t size, const char *loc_hint );
-void           swref_fatal_merge( swref *receiver, swref *sender );
-void           swref_free( swref *ref );
 
-cJSON *        swref_serialize( const swref *ref );
-swref *        swref_deserialize( cJSON *json );
+swref *                  swref_create( enum swref_type type,
+                                       const char *id,
+                                       struct cldvalue *value,
+                                       uintmax_t size,
+                                       const char *loc_hint );
 
-intmax_t       swref_to_intmax ( const swref *ref );
-double         swref_to_double ( const swref *ref );
-const char *   swref_to_string ( const swref *ref );
-cldptr         swref_to_cldptr ( const swref *ref );
-char *         swref_to_data   ( const swref *ref, size_t *size_out );
+void                     swref_fatal_merge( swref *receiver, swref *sender );
 
-swref *        swref_at_id( cielID *id );
-cielID *       cielID_of_swref( const swref *ref );
+void                     swref_free( swref *ref );
+void                     swref_free_ex( swref *ref, int keepcldvalue );
+
+cJSON *                  swref_serialize( const swref *ref );
+swref *                  swref_deserialize( cJSON *json );
+
+const struct cldvalue *  swref_to_cldvalue( const swref *ref );
+char *                   swref_to_data   ( const swref *ref, size_t *size_out );
+
+swref *                  swref_at_id( cielID *id );
+cielID *                 cielID_of_swref( const swref *ref );

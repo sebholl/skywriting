@@ -192,13 +192,15 @@ const void *cldptr_get_heap( size_t *const size ){
 
 cJSON * cldptr_to_json( cldptr const ptr ){
 
-    cJSON *result = cJSON_CreateArray();
+    cJSON *result = cJSON_CreateObject();
 
-    cJSON_AddItemToArray( result, cJSON_CreateString( "cldptr" ) );
+    cJSON *array = cJSON_CreateArray();
 
-    cJSON_AddItemToArray( result, cJSON_CreateNumber( ptr.key ) );
+    cJSON_AddItemToArray( array, cJSON_CreateNumber( ptr.key ) );
 
-    cJSON_AddItemToArray( result, cJSON_CreateNumber( ptr.offset ) );
+    cJSON_AddItemToArray( array, cJSON_CreateNumber( ptr.offset ) );
+
+    cJSON_AddItemToObject( result, "__cldptr__", array);
 
     return result;
 
@@ -206,8 +208,16 @@ cJSON * cldptr_to_json( cldptr const ptr ){
 
 cldptr cldptr_from_json( cJSON *const json ){
 
-    return cldptr_create( (int)cJSON_GetArrayItem( json, 1 )->valueint,
-                          (size_t)cJSON_GetArrayItem( json, 2 )->valueint );
+    cJSON *ref = cJSON_GetObjectItem(json, "__cldptr__");
+
+    if( ref != NULL ){
+
+        return cldptr_create(   (int)cJSON_GetArrayItem( ref, 0 )->valueint,
+                             (size_t)cJSON_GetArrayItem( ref, 0 )->valueint  );
+
+    }
+
+    return cldptr_null();
 
 }
 

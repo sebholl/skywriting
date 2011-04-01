@@ -12,11 +12,8 @@ int main(int argc, char *argv[])
 {
     int i;
 
-    char *tmp = strdup("");
-    char *ret_value;
-
-
     cldthread *threads[4];
+    cldvalue *results[4];
 
     cldthread_init();
 
@@ -34,14 +31,12 @@ int main(int argc, char *argv[])
     cldthread_joins( threads, 4 );
 
     for( i = 0; i < 4; i++ ){
-        asprintf( &ret_value, "%sThread %d Output: \"%s\"\n", tmp, i, cldthread_result_as_string(threads[i]) );
-        free(tmp);
-        tmp = ret_value;
+        results[i] = cldthread_result_as_cldvalue(threads[i]);
     }
 
     printf( "Finished!\n" );
 
-    return cldapp_exit( cldvalue_string( ret_value ) );
+    return cldapp_exit( cldvalue_array( results, 4 ) );
 
 }
 
@@ -59,5 +54,5 @@ cldvalue *my_thread(int thread_id)
 
     asprintf( &ret_value, "I've finished! (Thread ID: %d)", thread_id );
 
-    return cldvalue_string( ret_value );
+    return cldvalue_vargs( 2, cldvalue_string( ret_value ), cldvalue_integer( thread_id ) );
 }

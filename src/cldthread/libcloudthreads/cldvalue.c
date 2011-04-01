@@ -1,3 +1,5 @@
+#include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <float.h>
@@ -40,6 +42,48 @@ cldvalue *cldvalue_ptr( const cldptr ptr ){
     return result;
 }
 
+cldvalue *cldvalue_ref( swref *const ref ){
+    cldvalue *result = malloc( sizeof(cldvalue) );
+    result->type = CLDREF;
+    result->value.ref = ref;
+    return result;
+}
+
+cldvalue *cldvalue_array( cldvalue **const values, size_t const count ){
+
+    cldvalue *result = malloc( sizeof(cldvalue) );
+    result->type = ARRAY;
+    result->value.array.size = count;
+    result->value.array.values = calloc( count, sizeof( cldvalue * ) );
+
+    size_t i;
+    for( i = 0; i < count; ++i ) result->value.array.values[i] = values[i];
+
+    return result;
+
+}
+
+cldvalue *cldvalue_vargs( size_t const count, ... ){
+
+    va_list argp;
+    va_start( argp, count );
+
+    cldvalue *result = malloc( sizeof(cldvalue) );
+    result->type = ARRAY;
+    result->value.array.size = count;
+    result->value.array.values = calloc( count, sizeof( cldvalue * ) );
+
+    size_t i;
+
+    for( i = 0; i < count; ++i )
+        result->value.array.values[i] = va_arg( argp, cldvalue * );
+
+    va_end( argp );
+
+    return result;
+
+}
+
 
 cJSON *cldvalue_to_json( const cldvalue *const val ){
 
@@ -57,6 +101,17 @@ cJSON *cldvalue_to_json( const cldvalue *const val ){
             break;
         case CLDPTR:
             result = cldptr_to_json( val->value.ptr );
+            break;
+        case CLDREF:
+            result = swref_serialize( val->value.ref );
+            break;
+        case ARRAY:
+        {
+            size_t i;
+            result = cJSON_CreateArray();
+            for( i = 0; i < val->value.array.size; i++ )
+                cJSON_AddItemToArray( result, cldvalue_to_json(val->value.array.values[i]) );
+        }
             break;
         case NONE:
             result = cJSON_CreateNull();
@@ -97,10 +152,29 @@ cldvalue *cldvalue_from_json( cJSON *const json ){
 
             case cJSON_Array:
             {
-                result->type = CLDPTR;
-                result->value.ptr = cldptr_from_json( json );
+                size_t i;
+                cJSON *iter;
+
+                result->type = ARRAY;
+                result->value.array.size = (size_t)cJSON_GetArraySize( json );
+                result->value.array.values = calloc( result->value.array.size, sizeof( cldvalue * ) );
+
+                for( iter = json->child, i = 0; iter != NULL; iter = iter->next )
+                    result->value.array.values[i++] = cldvalue_from_json( iter );
             }
                 break;
+
+            case cJSON_Object:
+            {
+                if( (result->value.ref = swref_deserialize( json )) != NULL )
+                    result->type = CLDREF;
+                else if( !cldptr_is_null( (result->value.ptr = cldptr_from_json( json )) ) )
+                    result->type = CLDPTR;
+                else
+                    result->type = NONE;
+            }
+                break;
+
             case cJSON_NULL:
                 result->type = NONE;
                 break;
@@ -113,11 +187,52 @@ cldvalue *cldvalue_from_json( cJSON *const json ){
 
 }
 
+#define IMPLEMENT_CAST( TYPEENUM, UNIONFIELD, RETURNTYPE ) \
+RETURNTYPE cldvalue_to_##UNIONFIELD( const cldvalue *const c ){ \
+    if( c->type != TYPEENUM ){ \
+        fprintf( stderr, "cldvalue %p invalid cast to " #UNIONFIELD "\n", c ); \
+        exit( EXIT_FAILURE ); \
+    } \
+    return c->value.UNIONFIELD; \
+}
+
+IMPLEMENT_CAST( INTEGER, integer, intmax_t )
+IMPLEMENT_CAST( REAL, real, double )
+IMPLEMENT_CAST( STRING, string, const char * )
+IMPLEMENT_CAST( CLDPTR, ptr, cldptr )
+IMPLEMENT_CAST( CLDREF, ref, swref * )
+
+
+cldvalue **cldvalue_to_array( const cldvalue *const c, size_t *const size_out ){
+    if( c->type != ARRAY ){
+        fprintf(stderr,"cldvalue %p invalid cast to array\n", c);
+        exit( EXIT_FAILURE );
+    }
+    if(size_out != NULL) *size_out = c->value.array.size;
+    return c->value.array.values;
+}
+
+
 void cldvalue_free( cldvalue *const obj ){
 
-    switch(obj->type){
+    /* Catch endless recursion if pointers are cyclic */
+    int oldtype = obj->type;
+    obj->type = NONE;
+
+    switch(oldtype){
         case STRING:
-            free(obj->value.string);
+            free( obj->value.string );
+            break;
+        case CLDREF:
+            swref_free( obj->value.ref );
+            break;
+        case ARRAY:
+        {
+            size_t i;
+            for( i = 0; i < obj->value.array.size; ++i )
+                cldvalue_free(obj->value.array.values[i]);
+            free( obj->value.array.values );
+        }
             break;
         default:
             break;

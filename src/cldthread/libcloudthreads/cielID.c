@@ -171,7 +171,7 @@ int cielID_publish_stream( cielID *id ){
 
         free( streamfilename );
 
-        id->fd = open( streamfilepath, O_CREAT|O_WRONLY );
+        id->fd = open( streamfilepath, O_CREAT|O_WRONLY|O_TRUNC, S_IRUSR|S_IWUSR );
 
         free( streamfilepath );
 

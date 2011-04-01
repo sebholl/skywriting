@@ -150,56 +150,30 @@ int cldthread_open_result_as_stream( void ){
 }
 
 
+swref *cldthread_result_as_ref( cldthread *const thread ){
+
+    swref *ref = swref_at_id( thread );
+    cielID_close_stream( thread );
+
+    return ref;
+
+}
+
+
+cldvalue *cldthread_result_as_cldvalue( cldthread *const thread ){
+
+    swref *ref = cldthread_result_as_ref( thread );
+
+    cldvalue *result = (cldvalue *)swref_to_cldvalue( ref );
+    swref_free_ex( ref, 1 );
+
+    return result;
+
+}
+
+
 int cldapp_exit( cldvalue *const result ){
     _cldthread_submit_output( result );
     return 0;
 }
 
-
-intmax_t cldthread_result_as_intmax( cldthread *const thread ){
-
-    swref *ref = swref_at_id( thread );
-    cielID_close_stream( thread );
-
-    intmax_t result = swref_to_intmax( ref );
-    swref_free( ref );
-
-    return result;
-
-}
-
-double cldthread_result_as_double( cldthread *const thread ){
-
-    swref *ref = swref_at_id( thread );
-    cielID_close_stream( thread );
-
-    double result = swref_to_double( ref );
-    swref_free( ref );
-
-    return result;
-
-}
-
-const char *cldthread_result_as_string( cldthread *const thread ){
-
-    swref *ref = swref_at_id( thread );
-    cielID_close_stream( thread );
-
-    const char *result = swref_to_string( ref );
-    swref_free( ref );
-
-    return result;
-
-}
-
-cldptr cldthread_result_as_cldptr( cldthread *const thread ){
-
-    swref *ref = swref_at_id( thread );
-    cielID_close_stream( thread );
-
-    const cldptr result = swref_to_cldptr( ref );
-    swref_free( ref );
-
-    return result;
-
-}

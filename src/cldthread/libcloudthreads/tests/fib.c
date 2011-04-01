@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
 
         asprintf( &_group_id, "%p", Fib );
 
-        Fib((void*)termIndex);
+        return cldapp_exit( Fib((void*)termIndex) );
 
     } else {
 
@@ -46,6 +46,7 @@ cldvalue *Fib(void *_index){
             result = 0;
             break;
         case 1:
+        case 2:
             result = 1;
             break;
         default:
@@ -58,7 +59,7 @@ cldvalue *Fib(void *_index){
             printf("--> Joining threads...\n" );
             cldthread_joins( thread, 2 );
             printf("--> Evaluating result...\n" );
-            result = cldthread_result_as_intmax(thread[0]) + cldthread_result_as_intmax(thread[1]);
+            result = cldvalue_to_integer(cldthread_result_as_cldvalue(thread[0])) + cldvalue_to_integer(cldthread_result_as_cldvalue(thread[1]));
             break;
         }
     }

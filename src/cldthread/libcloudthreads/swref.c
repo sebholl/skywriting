@@ -40,26 +40,40 @@ void swref_fatal_merge( swref *const receiver, swref *const sender ){
 
 }
 
-void swref_free( swref *const ref ){
+void swref_free_ex( swref *const ref, int keepcldvalue ){
 
     if( ref != NULL ){
 
         if( ref->loc_hints != NULL ){
-            int i = 0;
 
-            const char *hint;
+            char *hint;
+            size_t i = 0;
+
             for( hint = ref->loc_hints[i]; (hint != NULL) && (i < ref->loc_hints_size); hint = ref->loc_hints[++i] ){
-                free( (char *)hint );
+                free( hint );
             }
 
             free(ref->loc_hints);
 
         }
 
+        if( (!keepcldvalue) && (ref->value != NULL) ){
+
+            cldvalue_free( ref->value );
+            ref->value = NULL;
+
+        }
+
         cielID_free( ref->id );
-        free( (swref *)ref );
+        free( ref );
 
     }
+
+}
+
+void swref_free( swref *const ref ){
+
+    swref_free_ex( ref, 0 );
 
 }
 
@@ -78,7 +92,7 @@ cJSON *swref_serialize( const swref *const ref ){
             case FUTURE:
                 break;
             case STREAMING:
-                cJSON_AddItemToArray( array, cJSON_CreateStringArray( ref->loc_hints, ref->loc_hints_size ) );
+                cJSON_AddItemToArray( array, cJSON_CreateStringArray( (const char **)ref->loc_hints, ref->loc_hints_size ) );
                 break;
             case DATA:
             {
@@ -90,7 +104,7 @@ cJSON *swref_serialize( const swref *const ref ){
             case CONCRETE:
             default:
                 cJSON_AddItemToArray( array, cJSON_CreateNumber(ref->size) );
-                cJSON_AddItemToArray( array, cJSON_CreateStringArray( ref->loc_hints, ref->loc_hints_size ) );
+                cJSON_AddItemToArray( array, cJSON_CreateStringArray( (const char **)ref->loc_hints, ref->loc_hints_size ) );
                 break;
         }
 
@@ -147,7 +161,7 @@ swref *swref_deserialize( cJSON *json ){
 
     if( (json != NULL) && ( (ref = cJSON_GetObjectItem(json, "__ref__")) != NULL ) ){
 
-        int i;
+        size_t i;
 
         cJSON *netlocs;
 
@@ -209,27 +223,12 @@ swref *swref_deserialize( cJSON *json ){
 }
 
 
-
-
-
-intmax_t swref_to_intmax( const swref *const ref ){
-    if( ref->type != DATA || ref->value->type != INTEGER ) fprintf(stderr,"swref %p invalid cast to int\n", ref);
-    return ref->value->value.integer;
-}
-
-double swref_to_double( const swref *const ref ){
-    if( ref->type != DATA || ref->value->type != REAL ) fprintf(stderr,"swref %p invalid cast to double\n", ref);
-    return (double)ref->value->value.real;
-}
-
-const char * swref_to_string( const swref *const ref ){
-    if( ref->type != DATA || ref->value->type != STRING ) fprintf(stderr,"swref %p invalid cast to string\n", ref);
-    return ref->value->value.string;
-}
-
-cldptr swref_to_cldptr( const swref *const ref ){
-    if( ref->type != DATA || ref->value->type != CLDPTR ) fprintf(stderr,"swref %p invalid cast to cldptr\n", ref);
-    return ref->value->value.ptr;
+const cldvalue *swref_to_cldvalue( const swref *const ref ){
+    if( ref->type != DATA ){
+        fprintf(stderr,"swref %p invalid cast to cldvalue\n", ref);
+        exit( EXIT_FAILURE );
+    }
+    return ref->value;
 }
 
 char * swref_to_data( const swref *const ref, size_t *const size_out ){
