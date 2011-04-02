@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "../cldthread.h"
+#include <cldthread.h>
 
 #include "pi_halton.c"
 
@@ -18,7 +18,14 @@ int main(int argc, char *argv[])
 
         double result;
 
-        cldthread_init();
+        if( !cldthread_init() ){
+
+            fprintf( stderr, "Please schedule this application using the CloudApp CIEL executor "
+                             "instead of attempting to invoke it directly. \n" );
+
+            exit( EXIT_FAILURE );
+
+        }
 
         result = Pi_Reducer( numSamples, numSurveys );
 
@@ -26,7 +33,7 @@ int main(int argc, char *argv[])
 
     } else {
 
-        printf( "Invalid parameters.\n\nUsage: pi <num_samples> <num_surveys>\n" );
+        printf( "\nInvalid parameters.\n\nUsage: pi <num_samples> <num_surveys>\n\n" );
 
     }
 

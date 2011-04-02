@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "../cldthread.h"
+#include <cldthread.h>
 
 cldvalue *my_thread();
 
@@ -15,7 +15,14 @@ int main(int argc, char *argv[])
     cldthread *threads[4];
     cldvalue *results[4];
 
-    cldthread_init();
+    if( !cldthread_init() ){
+
+        fprintf( stderr, "Please schedule this application using the CloudApp CIEL executor "
+                         "instead of attempting to invoke it directly. \n" );
+
+        exit( EXIT_FAILURE );
+
+    }
 
     for( i = 0; i < 4; i++ ){
         printf("Creating thread %d.\n", i );

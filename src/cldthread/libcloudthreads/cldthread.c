@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <cJSON/cJSON.h>
+#include "cJSON/cJSON.h"
 
 #include "swref.h"
 #include "ciel_checkpoint.h"
@@ -15,17 +15,27 @@
 
 int cldthread_init( void ){
 
-    cielID *id = cielID_create( sw_get_current_task_id() );
+    if( sw_init() && blcr_init_framework() ){
 
-    _ciel_set_task_id( id );
+        cielID *id = cielID_create( sw_get_current_task_id() );
 
-    cielID_free( id );
+        _ciel_set_task_id( id );
 
-    return blcr_init_framework() && sw_init();
+        cielID_free( id );
+
+        return 1;
+
+    }
+
+    #ifdef DEBUG
+    printf( "cldthread_init(): initialisation failed [could perhaps resort to POSIX]\n" );
+    #endif
+
+    return 0;
 
 }
 
-cldthread *cldthread_smart_create( cldvalue *(*const fptr)(void *), void *const arg0, char *const group_id ){
+cldthread *cldthread_smart_create( cldvalue *(*const fptr)(void *), void *const arg, char *const group_id ){
 
     cielID *thread_task_id;
     cielID *thread_output_id;
@@ -35,7 +45,7 @@ cldthread *cldthread_smart_create( cldvalue *(*const fptr)(void *), void *const 
     /* Create values for the new task */
 
     thread_task_id = cielID_create2( (group_id != NULL)
-                                     ? sw_generate_task_id( "cldthread", group_id, arg0 )
+                                     ? sw_generate_task_id( "cldthread", group_id, arg )
                                      : sw_generate_task_id( "cldthread", sw_get_current_task_id(), (void *)++_spawn_count ) );
 
     thread_output_id = cielID_create2( sw_generate_output_id( thread_task_id->id_str ) );
@@ -44,7 +54,7 @@ cldthread *cldthread_smart_create( cldvalue *(*const fptr)(void *), void *const 
 
     if( result < 0 ){ /* resumed process */
 
-        _cldthread_submit_output( fptr( arg0 ) );
+        _cldthread_submit_output( fptr( arg ) );
         exit( EXIT_SUCCESS );
 
     } else if ( result > 0 ) { /* checkpoint succeeded */
@@ -63,6 +73,23 @@ cldthread *cldthread_smart_create( cldvalue *(*const fptr)(void *), void *const 
     return thread_output_id;
 
 }
+
+static void *(*_posixfptr)(void *);
+
+static cldvalue *_posixstub( void *arg ){
+
+    void *result = _posixfptr( arg );
+    return cldvalue_integer( (intmax_t)((int)result) );
+
+}
+
+cldthread *cldthread_posix_create( void *(*fptr)(void *), void *arg ){
+
+    _posixfptr = fptr;
+    return cldthread_smart_create( _posixstub, arg, NULL );
+
+}
+
 
 int cldthread_open_result_as_stream( void ){
 

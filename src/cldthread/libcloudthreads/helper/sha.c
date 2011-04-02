@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "sha_helper_functions.h"
+#include "sha.h"
 
 char * sha1_hash_to_hex_digest( const unsigned char *const sha_hash ){
 

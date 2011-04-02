@@ -33,7 +33,7 @@ static void _ciel_update_env( const cielID *const new_task_id, cielID *input_id[
     char env_name[2048], env_value[2048];
     size_t i;
 
-    #if DEBUG
+    #ifdef DEBUG
     printf( "_ciel_update_env(): setting new task id \"%s\"\n", new_task_id->id_str );
     #endif
 
@@ -42,7 +42,7 @@ static void _ciel_update_env( const cielID *const new_task_id, cielID *input_id[
     asprintf( &path, "/tmp/%s", sw_get_current_task_id() );
     asprintf( &path2, "/tmp/%s:sync", sw_get_current_task_id() );
 
-    #if DEBUG
+    #ifdef DEBUG
     printf( "_ciel_update_env(): opening named FIFO \"%s\"\n", path );
     #endif
 
@@ -58,7 +58,7 @@ static void _ciel_update_env( const cielID *const new_task_id, cielID *input_id[
             _strip_new_line( env_name );
             _strip_new_line( env_value );
 
-            #if debug
+            #ifdef DEBUG
             printf( "_ciel_update_env(): setting %s to \"%s\"\n", env_name, env_value );
             #endif
 

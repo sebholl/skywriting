@@ -4,7 +4,7 @@
 
 #include <curl/curl.h>
 
-#include "curl_helper_functions.h"
+#include "curl.h"
 
 /* MemoryWrite example taken from http://curl.haxx.se/libcurl/c/getinmemory.html */
 

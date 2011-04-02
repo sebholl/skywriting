@@ -3,7 +3,8 @@
 #pragma once
 
 #include <stdint.h>
-#include <cJSON/cJSON.h>
+
+#include "cJSON/cJSON.h"
 
 #include "cielID.h"
 

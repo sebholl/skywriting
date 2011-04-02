@@ -1,7 +1,8 @@
 #pragma once
 
 #include <openssl/sha.h>
-#include <cJSON/cJSON.h>
+
+#include "cJSON/cJSON.h"
 
 #include "cielID.h"
 

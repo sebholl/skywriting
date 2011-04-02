@@ -123,7 +123,7 @@ static void _cldptr_heapfree( int offset ){
 
     cldptr_header *header = _heapptr + offset - sizeof( cldptr_header );
 
-    #if DEBUG
+    #ifdef DEBUG
     if( header->inuse == 0 ) fprintf( stderr, "cldptr_heapfree(): double free on offset %d\n", offset );
     #endif
 
@@ -156,7 +156,7 @@ cldptr cldptr_malloc( const size_t size ){
     int offset = _cldptr_heapalloc( size );
 
     if (offset >= 0) result = cldptr_create( _cldptr_current_heap_key(), offset );
-    #if DEBUG
+    #ifdef DEBUG
     else fprintf( stderr, "cldptr_malloc(): unable to allocate %d byte(s)\n", (int)size );
     #endif
 
@@ -180,7 +180,7 @@ void cldptr_free( cldptr const ptr ){
 
     if( !cldptr_is_null( ptr ) && (_cldptr_current_heap_key() == ptr.key) )
         _cldptr_heapfree( ptr.offset );
-    #if DEBUG
+    #ifdef DEBUG
     else
         fprintf( stderr, "shrd_free(): attempt to free a cldptr from another task's heap\n" );
     #endif

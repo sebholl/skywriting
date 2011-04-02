@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#include "common/curl_helper_functions.h"
+#include "helper/curl.h"
 #include "cldptr.h"
 
 #include "blcr_interface.h"

@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "../cldthread.h"
+#include <cldthread.h>
 
 cldvalue *Fib(void *_index);
 
@@ -17,7 +17,14 @@ int main(int argc, char *argv[])
 
     if(argc==2 && sscanf( argv[1], "%d", &termIndex ) && termIndex >= 0){
 
-        cldthread_init();
+        if( !cldthread_init() ){
+
+            fprintf( stderr, "Please schedule this application using the CloudApp CIEL executor "
+                             "instead of attempting to invoke it directly. \n" );
+
+            exit( EXIT_FAILURE );
+
+        }
 
         asprintf( &_group_id, "%p", Fib );
 
@@ -25,7 +32,7 @@ int main(int argc, char *argv[])
 
     } else {
 
-        printf( "Invalid parameters (input must be a positive integer).\n\nUsage: fib <term-index>\n" );
+        printf( "\nInvalid parameters (input must be a positive integer).\n\nUsage: fib <term-index>\n\n" );
 
     }
 

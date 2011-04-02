@@ -16,7 +16,9 @@ const cldthread *cldthread_current_thread( void );
 /* Managing cloud threads */
 
 #define cldthread_create( fptr, arg0 ) cldthread_smart_create( fptr, arg0, NULL )
-cldthread *cldthread_smart_create( cldvalue *(*fptr)(void *), void *arg0, char *group_id );
+cldthread *cldthread_smart_create( cldvalue *(*fptr)(void *), void *arg, char *group_id );
+
+cldthread *cldthread_posix_create( void *(*fptr)(void *), void *arg0 );
 
 #define cldthread_join( thread ) cldthread_joins( &(thread), 1 )
 #define cldthread_joins( threads, count ) cielID_read_streams( threads, count )

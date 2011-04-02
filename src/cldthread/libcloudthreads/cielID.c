@@ -7,7 +7,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#include "common/curl_helper_functions.h"
+#include "helper/curl.h"
 #include "sw_interface.h"
 #include "swref.h"
 #include "ciel_checkpoint.h"
@@ -75,7 +75,7 @@ char *cielID_dump_stream( cielID *id, size_t * const size_out ){
 
     int fd = cielID_open_fd( id );
 
-    #if DEBUG
+    #ifdef DEBUG
     printf( "cielID_dump_stream(): attempting to dump fd (%d) for id (%s)\n", fd, id->id_str );
     #endif
 
@@ -93,7 +93,7 @@ char *cielID_dump_stream( cielID *id, size_t * const size_out ){
 
                 if(read(fd, result, len)==len){
 
-                    #if DEBUG
+                    #ifdef DEBUG
                     printf( "cielID_dump_stream(): read %ld bytes directly from block store file\n", len );
                     #endif
 
@@ -101,7 +101,7 @@ char *cielID_dump_stream( cielID *id, size_t * const size_out ){
 
                 } else {
 
-                    #if DEBUG
+                    #ifdef DEBUG
                     fprintf( stderr, "cielID_dump_stream(): fail when attempting to read %ld bytes from block store\n", len );
                     #endif
 
@@ -114,7 +114,7 @@ char *cielID_dump_stream( cielID *id, size_t * const size_out ){
 
         } else if ( S_ISFIFO(info.st_mode) ) {
 
-            #if DEBUG
+            #ifdef DEBUG
             printf( "cielID_dump_stream(): reading from a FIFO (named pipe)\n" );
             #endif
 
@@ -123,7 +123,7 @@ char *cielID_dump_stream( cielID *id, size_t * const size_out ){
             size_t tmp;
 
             while( (tmp = read( fd, buffer, 4096 )) ){
-                #if DEBUG
+                #ifdef DEBUG
                 printf( "cielID_dump_stream(): read %d byte(s) from FIFO...\n", (int)tmp );
                 #endif
                 WriteMemoryCallback( buffer, 1, tmp, &mem );
@@ -145,7 +145,7 @@ char *cielID_dump_stream( cielID *id, size_t * const size_out ){
 
     }
 
-    #if DEBUG
+    #ifdef DEBUG
     printf("cielID_dump_stream(): result (%p)\n", result );
     #endif
 
@@ -236,7 +236,7 @@ size_t cielID_read_streams( cielID *id[], size_t const count ){
 
     for( i = 0; i < count; i++ ){
 
-        #if DEBUG
+        #ifdef DEBUG
         printf("cielID_read_streams(): attempting to open stream %d of %d (%s)\n", (int)i, (int)count, id[i]->id_str );
         #endif
 

@@ -32,9 +32,9 @@ int blcr_init_framework( void ){
 
     if (client_id < 0) {
       if (errno == ENOSYS) {
-          perror("Checkpoint failed: support missing from kernel\n");
+          fprintf(stderr, "<FATAL ERROR> blcr_init_framework(): libcr kernel module not installed\n");
       } else {
-          printf("Failed cr_init(): %s\n", cr_strerror(errno));
+          fprintf(stderr, "<FATAL ERROR> blcr_init_framework(): cr_init() failed: %s\n", cr_strerror(errno));
       }
       return 0;
     }
@@ -42,7 +42,7 @@ int blcr_init_framework( void ){
     cb_id = cr_register_callback(blcr_callback, NULL, CR_SIGNAL_CONTEXT);
 
     if (cb_id < 0) {
-      printf("Failed cr_register_callback(): %s\n", cr_strerror(errno));
+      fprintf(stderr, "blcr_init_framework(): failed cr_register_callback(): %s\n", cr_strerror(errno));
       return 0;
     }
 

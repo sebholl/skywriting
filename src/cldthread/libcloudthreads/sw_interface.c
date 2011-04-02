@@ -9,7 +9,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "common/curl_helper_functions.h"
+#include "helper/curl.h"
 
 #include "sw_interface.h"
 
@@ -17,7 +17,12 @@
 
 int sw_init( void ){
 
-    return ( curl_global_init( CURL_GLOBAL_ALL ) == 0 );
+    return ( sw_get_block_store_path() != NULL ) &&
+           ( sw_get_current_output_id() != NULL ) &&
+           ( sw_get_current_task_id() != NULL ) &&
+           ( sw_get_current_worker_loc() != NULL ) &&
+           ( sw_get_master_loc() != NULL ) &&
+           ( curl_global_init( CURL_GLOBAL_ALL ) == 0 );
 
 }
 
@@ -255,7 +260,7 @@ int sw_open_fd_for_id( const char *id ){
 
     if(path != NULL){
 
-        #if VERBOSE || DEBUG
+        #ifdef DEBUG
         printf( "sw_open_fd_for_id(): opening %s from path \"%s\".\n", id, path );
         #endif
 
@@ -264,7 +269,7 @@ int sw_open_fd_for_id( const char *id ){
 
     } else {
 
-        #if DEBUG
+        #ifdef DEBUG
         fprintf( stderr, "sw_open_fd_for_id(): no path value for id \"%s\".\n", id );
         #endif
 
@@ -487,29 +492,23 @@ inline int sw_set_current_task_id( const char *const taskid ){
 }
 
 inline const char* sw_get_current_task_id( void ){
-    char *value = (char*)getenv( "CL_TASK_ID" );
-    return (value != NULL ? value : "1234" );
+    return getenv( "CL_TASK_ID" );
 }
 
 inline const char* sw_get_current_worker_loc( void ){
-    char *value = (char*)getenv( "CL_WORKER_LOC" );
-    return (value != NULL ? value : "localhost:9001" );
-
+    return getenv( "CL_WORKER_LOC" );
 }
 
 inline const char* sw_get_current_output_id( void ){
-    char *value = (char*)getenv( "CL_OUTPUT_ID" );
-    return (value != NULL ? value : "4321" );
+    return getenv( "CL_OUTPUT_ID" );
 }
 
 inline const char* sw_get_master_loc( void ){
-    char *value = (char*)getenv( "CL_MASTER_LOC" );
-    return (value != NULL ? value : "localhost:9000" );
+    return getenv( "CL_MASTER_LOC" );
 }
 
 inline const char* sw_get_block_store_path( void ){
-    char *value = (char*)getenv( "CL_BLOCK_STORE" );
-    return (value != NULL ? value : "storeW1" );
+    return getenv( "CL_BLOCK_STORE" );
 }
 
 

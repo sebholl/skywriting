@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_workspace_file>
+	<Workspace title="Workspace">
+		<Project filename="libcloudthreads/libcloudthreads.cbp" />
+		<Project filename="tests/fib.cbp">
+			<Depends filename="libcloudthreads/libcloudthreads.cbp" />
+		</Project>
+		<Project filename="tests/helloworld.cbp">
+			<Depends filename="libcloudthreads/libcloudthreads.cbp" />
+		</Project>
+		<Project filename="tests/linkedlist.cbp">
+			<Depends filename="libcloudthreads/libcloudthreads.cbp" />
+		</Project>
+		<Project filename="tests/pi.cbp">
+			<Depends filename="libcloudthreads/libcloudthreads.cbp" />
+		</Project>
+		<Project filename="tests/prodcons.cbp">
+			<Depends filename="libcloudthreads/libcloudthreads.cbp" />
+		</Project>
+		<Project filename="tests/tests.cbp" active="1">
+			<Depends filename="tests/fib.cbp" />
+			<Depends filename="tests/helloworld.cbp" />
+			<Depends filename="tests/linkedlist.cbp" />
+			<Depends filename="tests/pi.cbp" />
+			<Depends filename="tests/prodcons.cbp" />
+		</Project>
+	</Workspace>
+</CodeBlocks_workspace_file>

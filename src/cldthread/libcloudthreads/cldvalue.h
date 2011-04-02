@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <inttypes.h>
 
-#include <cJSON/cJSON.h>
+#include "cJSON/cJSON.h"
 
 #include "cldptr.h"
 

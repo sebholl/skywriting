@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "../cldthread.h"
+#include <cldthread.h>
 
 cldvalue *ListLinker( void *arg );
 
@@ -48,7 +48,14 @@ void cldlink_print( cldptr head ){
 int main(int argc, char *argv[])
 {
 
-    cldthread_init();
+    if( !cldthread_init() ){
+
+        fprintf( stderr, "Please schedule this application using the CloudApp CIEL executor "
+                         "instead of attempting to invoke it directly. \n" );
+
+        exit( EXIT_FAILURE );
+
+    }
 
     //if(argc==1){
 

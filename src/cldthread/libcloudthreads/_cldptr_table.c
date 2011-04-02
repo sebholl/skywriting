@@ -4,7 +4,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <klib/khash.h>
+#include "klib/khash.h"
 
 KHASH_MAP_INIT_INT( Int2Ptr, void *)
 
@@ -65,9 +65,8 @@ static void *_cldptr_table_pull( int key ){
 
         if( fd >= 0 ) close(fd);
 
-        #if DEBUG
         fprintf( stderr, "_cldptr_table_put(): cannot retrieve file size for key %d (fd: %d)\n", key, fd );
-        #endif
+        exit( EXIT_FAILURE );
 
     }
 
@@ -85,14 +84,14 @@ static void *_cldptr_table_get( int key ){
 
     if( i != kh_end( table ) ){
 
-        #if DEBUG
+        #ifdef DEBUG
         fprintf( stderr, "_cldptr_table_get(): retrieving heap offset for %d directly from table\n", key );
         #endif
         return kh_value( _cldptr_table(), i );
 
     }
 
-    #if DEBUG
+    #ifdef DEBUG
     fprintf( stderr, "_cldptr_table_get(): retrieving heap offset for %d directly from cielID\n", key );
     #endif
     return _cldptr_table_pull( key );

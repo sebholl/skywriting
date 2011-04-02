@@ -1,7 +1,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#include "common/sha_helper_functions.h"
+#include "helper/sha.h"
 
 static char *_sw_generate_temp_path( const char *const id ){
 

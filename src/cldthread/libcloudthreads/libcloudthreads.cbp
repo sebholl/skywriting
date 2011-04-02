@@ -2,79 +2,34 @@
 <CodeBlocks_project_file>
 	<FileVersion major="1" minor="6" />
 	<Project>
-		<Option title="libcloudthreads" />
+		<Option title="libCloudThreads" />
 		<Option pch_mode="2" />
 		<Option default_target="helloworld" />
 		<Option compiler="gcc" />
+		<Option extended_obj_names="1" />
 		<Build>
-			<Target title="libCloudThreads">
-				<Option output="libcloudthreads" prefix_auto="1" extension_auto="1" />
+			<Target title="Release">
+				<Option output="bin/libcloudthreads" prefix_auto="1" extension_auto="1" />
 				<Option working_dir="" />
-				<Option object_output="obj/lib/" />
+				<Option type="2" />
+				<Option compiler="gcc" />
+				<Option createDefFile="1" />
+			</Target>
+			<Target title="Debug">
+				<Option output="bin/libcloudthreads" prefix_auto="1" extension_auto="1" />
+				<Option working_dir="" />
 				<Option type="2" />
 				<Option compiler="gcc" />
 				<Option createDefFile="1" />
 				<Compiler>
 					<Add option="-g" />
-				</Compiler>
-			</Target>
-			<Target title="helloworld">
-				<Option output="bin/helloworld/helloworld" prefix_auto="1" extension_auto="1" />
-				<Option working_dir="../../../../" />
-				<Option object_output="obj/helloworld/" />
-				<Option type="1" />
-				<Option compiler="gcc" />
-				<Compiler>
-					<Add option="-g" />
-				</Compiler>
-			</Target>
-			<Target title="pi">
-				<Option output="bin/pi/pi" prefix_auto="1" extension_auto="1" />
-				<Option working_dir="../../../../" />
-				<Option object_output="obj/pi/" />
-				<Option type="1" />
-				<Option compiler="gcc" />
-				<Compiler>
-					<Add option="-g" />
-				</Compiler>
-			</Target>
-			<Target title="fib">
-				<Option output="bin/fib/fib" prefix_auto="1" extension_auto="1" />
-				<Option working_dir="../../../../" />
-				<Option object_output="obj/fib/" />
-				<Option type="1" />
-				<Option compiler="gcc" />
-				<Compiler>
-					<Add option="-g" />
-				</Compiler>
-			</Target>
-			<Target title="prodcons">
-				<Option output="bin/prodcons/prodcons" prefix_auto="1" extension_auto="1" />
-				<Option working_dir="../../../../" />
-				<Option object_output="obj/prodcons/" />
-				<Option type="1" />
-				<Option compiler="gcc" />
-				<Compiler>
-					<Add option="-g" />
-				</Compiler>
-			</Target>
-			<Target title="linkedlist">
-				<Option output="bin/linkedlist/linkedlist" prefix_auto="1" extension_auto="1" />
-				<Option working_dir="../../../../" />
-				<Option object_output="obj/linkedlist/" />
-				<Option type="1" />
-				<Option compiler="gcc" />
-				<Compiler>
-					<Add option="-g" />
+					<Add option="-DDEBUG" />
 				</Compiler>
 			</Target>
 		</Build>
-		<VirtualTargets>
-			<Add alias="All" targets="libCloudThreads;helloworld;pi;fib;prodcons;linkedlist;" />
-		</VirtualTargets>
 		<Compiler>
 			<Add option="-Wall" />
-			<Add option="-g" />
+			<Add option="-std=gnu99" />
 			<Add directory="lib" />
 		</Compiler>
 		<Linker>
@@ -101,6 +56,10 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="blcr_interface.h" />
+		<Unit filename="cJSON/cJSON.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="cJSON/cJSON.h" />
 		<Unit filename="cielID.c">
 			<Option compilerVar="CC" />
 		</Unit>
@@ -121,19 +80,19 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="cldvalue.h" />
-		<Unit filename="common/curl_helper_functions.c">
+		<Unit filename="helper/curl.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="common/curl_helper_functions.h" />
-		<Unit filename="common/sha_helper_functions.c">
+		<Unit filename="helper/curl.h" />
+		<Unit filename="helper/sha.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="common/sha_helper_functions.h" />
-		<Unit filename="lib/cJSON/cJSON.c">
+		<Unit filename="helper/sha.h" />
+		<Unit filename="klib/khash.h" />
+		<Unit filename="klib/khash_test.c">
 			<Option compilerVar="CC" />
+			<Option target="&lt;{~None~}&gt;" />
 		</Unit>
-		<Unit filename="lib/cJSON/cJSON.h" />
-		<Unit filename="lib/klib/khash.h" />
 		<Unit filename="sw_interface.c">
 			<Option compilerVar="CC" />
 		</Unit>
@@ -142,36 +101,14 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="swref.h" />
-		<Unit filename="tests/fib.c">
-			<Option compilerVar="CC" />
-			<Option target="fib" />
-		</Unit>
-		<Unit filename="tests/helloworld.c">
-			<Option compilerVar="CC" />
-			<Option target="helloworld" />
-		</Unit>
-		<Unit filename="tests/linkedlist.c">
-			<Option compilerVar="CC" />
-			<Option target="linkedlist" />
-		</Unit>
-		<Unit filename="tests/pi.c">
-			<Option compilerVar="CC" />
-			<Option target="pi" />
-		</Unit>
-		<Unit filename="tests/pi_halton.c">
-			<Option compilerVar="CC" />
-			<Option compile="0" />
-			<Option link="0" />
-			<Option target="pi" />
-		</Unit>
-		<Unit filename="tests/prodcons.c">
-			<Option compilerVar="CC" />
-			<Option target="prodcons" />
-		</Unit>
 		<Extensions>
 			<code_completion />
 			<debugger />
 			<envvars />
+			<lib_finder>
+				<lib name="libssl" />
+				<lib name="libcurl" />
+			</lib_finder>
 		</Extensions>
 	</Project>
 </CodeBlocks_project_file>
