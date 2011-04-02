@@ -15,15 +15,36 @@ static size_t   _heapoffset = 0;
 static size_t   _heapsize = 0;
 static int      _heapkey = 0;
 
-cielID * cldptr_reset_heap( const char *const heap_id ){
+void cldptr_reset_heap( const char *const heap_id ){
 
-    free(_heapptr);
+    if( _heapptr && _heapkey){
+
+        /* Resize heap in case we have a lot of left over space */
+        void *tmp;
+        if( (tmp = realloc( _heapptr, _heapoffset )) != NULL ) _heapptr = tmp;
+
+        /* Mark the old heap as read-only */
+        mprotect( _heapptr, _heapoffset, PROT_READ );
+
+        /* And put its pointer into the hashtable */
+        _cldptr_table_put( _heapkey, _heapptr );
+
+    } else {
+
+        free( _heapptr );
+
+    }
+
     _heapptr = NULL;
 
     _heapoffset = 0;
     _heapsize = 0;
 
     _heapkey = _cldptr_hash_heapid( heap_id );
+
+}
+
+cielID *cldptr_heap_cielID( void ){
 
     return _cldptr_heap_to_cielID( _heapkey );
 
@@ -169,7 +190,7 @@ void cldptr_free( cldptr const ptr ){
 
 void *cldptr_deref( cldptr ptr ){
 
-    printf( "Dereference cldptr { %d, %d}\n", ptr.key, ptr.offset );
+    //printf( "Dereference cldptr {%d, %d}\n", ptr.key, ptr.offset );
     if( _cldptr_current_heap_key() == ptr.key ){
 
         return ( _heapptr + ptr.offset );
@@ -213,7 +234,7 @@ cldptr cldptr_from_json( cJSON *const json ){
     if( ref != NULL ){
 
         return cldptr_create(   (int)cJSON_GetArrayItem( ref, 0 )->valueint,
-                             (size_t)cJSON_GetArrayItem( ref, 0 )->valueint  );
+                             (size_t)cJSON_GetArrayItem( ref, 1 )->valueint  );
 
     }
 

@@ -10,7 +10,7 @@
 #include "common/curl_helper_functions.h"
 #include "sw_interface.h"
 #include "swref.h"
-#include "cldthread.h"
+#include "ciel_checkpoint.h"
 
 #include "cielID.h"
 
@@ -36,20 +36,16 @@ cielID * cielID_create2( char *id_str ){
 }
 
 
-int cielID_read_stream( cielID *id ){
+int cielID_open_fd( cielID *id ){
 
-    if(id->fd < 0) {
-
-        id->fd = sw_open_fd_for_id( id->id_str );
-
-    }
+    if(id->fd < 0) id->fd = sw_open_fd_for_id( id->id_str );
 
     return id->fd;
 
 }
 
 
-void cielID_close_stream( cielID *id ){
+void cielID_close_fd( cielID *id ){
 
     if(id->fd >= 0){
 
@@ -64,7 +60,7 @@ void cielID_free( cielID *id ){
 
     if( id != NULL ){
 
-        cielID_close_stream( id );
+        cielID_close_fd( id );
         free( id->id_str );
         free( id );
 
@@ -77,10 +73,10 @@ char *cielID_dump_stream( cielID *id, size_t * const size_out ){
 
     char *result = NULL;
 
-    int fd = cielID_read_stream( id );
+    int fd = cielID_open_fd( id );
 
-    #if VERBOSE
-    printf("Attempting to dump fd (%d) for id (%s)\n", fd, id->id_str );
+    #if DEBUG
+    printf( "cielID_dump_stream(): attempting to dump fd (%d) for id (%s)\n", fd, id->id_str );
     #endif
 
     if( fd >= 0 ){
@@ -97,16 +93,16 @@ char *cielID_dump_stream( cielID *id, size_t * const size_out ){
 
                 if(read(fd, result, len)==len){
 
-                    #if VERBOSE
-                    printf( "--> Read %ld bytes directly from block store file\n", len );
+                    #if DEBUG
+                    printf( "cielID_dump_stream(): read %ld bytes directly from block store file\n", len );
                     #endif
 
                     if( size_out != NULL ) *size_out = (size_t)len;
 
                 } else {
 
-                    #if VERBOSE
-                    printf( "--> Fail when attempting to read %ld bytes from block store\n", len );
+                    #if DEBUG
+                    fprintf( stderr, "cielID_dump_stream(): fail when attempting to read %ld bytes from block store\n", len );
                     #endif
 
                     free( result );
@@ -118,8 +114,8 @@ char *cielID_dump_stream( cielID *id, size_t * const size_out ){
 
         } else if ( S_ISFIFO(info.st_mode) ) {
 
-            #if VERBOSE
-            printf( "--> Reading from a FIFO (named pipe)\n" );
+            #if DEBUG
+            printf( "cielID_dump_stream(): reading from a FIFO (named pipe)\n" );
             #endif
 
             struct MemoryStruct mem = { NULL, 0, 0 };
@@ -127,8 +123,8 @@ char *cielID_dump_stream( cielID *id, size_t * const size_out ){
             size_t tmp;
 
             while( (tmp = read( fd, buffer, 4096 )) ){
-                #if VERBOSE
-                printf( "--> Read %d byte(s) from FIFO...\n", (int)tmp );
+                #if DEBUG
+                printf( "cielID_dump_stream(): read %d byte(s) from FIFO...\n", (int)tmp );
                 #endif
                 WriteMemoryCallback( buffer, 1, tmp, &mem );
             }
@@ -140,7 +136,7 @@ char *cielID_dump_stream( cielID *id, size_t * const size_out ){
 
         } else {
 
-            fprintf( stderr, "ERROR: Unexpected file type (st_mode: %d) whilst attempting to dump ID (%s)\n", (int)info.st_mode, id->id_str );
+            fprintf( stderr, "cielID_dump_stream(): <FATAL ERROR> unexpected file type (st_mode: %d) whilst attempting to dump ID (%s)\n", (int)info.st_mode, id->id_str );
             exit( EXIT_FAILURE );
 
         }
@@ -149,10 +145,8 @@ char *cielID_dump_stream( cielID *id, size_t * const size_out ){
 
     }
 
-
-
-    #if VERBOSE
-    printf("::: ID content result: %p\n", result );
+    #if DEBUG
+    printf("cielID_dump_stream(): result (%p)\n", result );
     #endif
 
     return result;
@@ -235,3 +229,38 @@ int cielID_finalize_stream( cielID *id ){
 
 }
 
+
+size_t cielID_read_streams( cielID *id[], size_t const count ){
+
+    size_t i;
+
+    for( i = 0; i < count; i++ ){
+
+        #if DEBUG
+        printf("cielID_read_streams(): attempting to open stream %d of %d (%s)\n", (int)i, (int)count, id[i]->id_str );
+        #endif
+
+        if( cielID_open_fd(id[i]) < 0 ){
+
+            cielID *new_task_id = cielID_create2( sw_generate_new_id( "cldthread", sw_get_current_task_id(), "task" ) );
+
+            if(_ciel_spawn_chkpt_task( new_task_id, NULL, id, count, 1 )) i = count;
+
+            cielID_free( new_task_id );
+
+            break;
+
+        }
+
+    }
+
+    return i;
+
+}
+
+int cielID_read_stream( cielID *id ){
+
+    cielID_read_streams( &id, 1 );
+    return cielID_open_fd( id );
+
+}

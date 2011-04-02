@@ -13,6 +13,7 @@ struct swref;
 
 typedef struct cldvalue {
 
+    /* Note: Ensure integrity with cldvalue.c's cldvalue_type_names[] */
     enum { NONE=0, INTEGER, REAL, STRING, CLDPTR, CLDREF, ARRAY } type;
 
     union {
@@ -28,6 +29,8 @@ typedef struct cldvalue {
     } value;
 
 } cldvalue;
+
+
 
 cldvalue *    cldvalue_none( void );
 cldvalue *    cldvalue_integer( intmax_t intgr );
@@ -46,6 +49,7 @@ double        cldvalue_to_real( const cldvalue *obj );
 const char *  cldvalue_to_string( const cldvalue *obj );
 cldptr        cldvalue_to_cldptr( const cldvalue *obj );
 cldvalue **   cldvalue_to_array( const cldvalue * c, size_t * size_out );
+const struct swref * cldvalue_to_swref( const cldvalue *obj );
 
 cJSON *       cldvalue_to_json( const cldvalue *val );
 cldvalue *    cldvalue_from_json( cJSON *json );

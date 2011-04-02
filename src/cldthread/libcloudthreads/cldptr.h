@@ -24,4 +24,5 @@ int            cldptr_is_null( cldptr test );
 void *         cldptr_deref( cldptr ptr );
 void           cldptr_free( cldptr ptr );
 const void *   cldptr_get_heap( size_t *size );
-cielID *       cldptr_reset_heap( const char * heap_id );
+void           cldptr_reset_heap( const char * heap_id );
+cielID *       cldptr_heap_cielID( void );

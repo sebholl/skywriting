@@ -232,7 +232,10 @@ const cldvalue *swref_to_cldvalue( const swref *const ref ){
 }
 
 char * swref_to_data( const swref *const ref, size_t *const size_out ){
-    if( ref->type != CONCRETE || ref->size > 0 ) fprintf(stderr,"swref %p invalid cast to data\n", ref);
+    if( ref->type != CONCRETE ){
+        fprintf(stderr,"swref %p invalid cast to data\n", ref);
+        exit( EXIT_FAILURE );
+    }
     return cielID_dump_stream( ref->id, size_out );
 }
 

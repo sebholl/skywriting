@@ -7,6 +7,9 @@
 
 #include "cldvalue.h"
 
+static const char *cldvalue_type_names[] = { "NONE", "INTEGER", "REAL", "STRING",
+                                             "CLDPTR", "CLDREF", "ARRAY" };
+
 cldvalue *cldvalue_none( void ){
     cldvalue *result = malloc( sizeof(cldvalue) );
     result->type = NONE;
@@ -168,10 +171,10 @@ cldvalue *cldvalue_from_json( cJSON *const json ){
             {
                 if( (result->value.ref = swref_deserialize( json )) != NULL )
                     result->type = CLDREF;
-                else if( !cldptr_is_null( (result->value.ptr = cldptr_from_json( json )) ) )
+                else {
+                    result->value.ptr = cldptr_from_json( json );
                     result->type = CLDPTR;
-                else
-                    result->type = NONE;
+                }
             }
                 break;
 
@@ -187,20 +190,20 @@ cldvalue *cldvalue_from_json( cJSON *const json ){
 
 }
 
-#define IMPLEMENT_CAST( TYPEENUM, UNIONFIELD, RETURNTYPE ) \
-RETURNTYPE cldvalue_to_##UNIONFIELD( const cldvalue *const c ){ \
+#define IMPLEMENT_CAST( TYPEENUM, UNIONFIELD, RETURNTYPE, TONAME ) \
+RETURNTYPE cldvalue_to_##TONAME( const cldvalue *const c ){ \
     if( c->type != TYPEENUM ){ \
-        fprintf( stderr, "cldvalue %p invalid cast to " #UNIONFIELD "\n", c ); \
+        fprintf( stderr, "<FATAL ERROR> invalid cldvalue cast from %s to " #TONAME " (%p)\n", cldvalue_type_names[c->type], c ); \
         exit( EXIT_FAILURE ); \
     } \
     return c->value.UNIONFIELD; \
 }
 
-IMPLEMENT_CAST( INTEGER, integer, intmax_t )
-IMPLEMENT_CAST( REAL, real, double )
-IMPLEMENT_CAST( STRING, string, const char * )
-IMPLEMENT_CAST( CLDPTR, ptr, cldptr )
-IMPLEMENT_CAST( CLDREF, ref, swref * )
+IMPLEMENT_CAST( INTEGER, integer, intmax_t, integer )
+IMPLEMENT_CAST( REAL, real, double, real )
+IMPLEMENT_CAST( STRING, string, const char *, string )
+IMPLEMENT_CAST( CLDPTR, ptr, cldptr, cldptr )
+IMPLEMENT_CAST( CLDREF, ref, const swref *, swref )
 
 
 cldvalue **cldvalue_to_array( const cldvalue *const c, size_t *const size_out ){

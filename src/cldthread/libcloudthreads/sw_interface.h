@@ -63,7 +63,7 @@ int sw_set_current_task_id( const char *taskid );
 
 /* Miscellaneous helper functions */
 
-char *sw_generate_new_task_id( const char *handler, const char *group_id, const char* desc );
+char *sw_generate_new_id( const char *handler, const char *group_id, const char* desc );
 
 char *sw_generate_task_id( const char *handler, const char *group_id, const void* unique_id );
 

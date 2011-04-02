@@ -5,137 +5,64 @@
 #include <cJSON/cJSON.h>
 
 #include "swref.h"
+#include "ciel_checkpoint.h"
 
 #include "cldthread.h"
 
 #include "_cldthread.c"
 
-static cldvalue *_result = NULL;
-
 /* API */
 
 int cldthread_init( void ){
 
-    if(_result==NULL) _result = cldvalue_none();
-    _cldthread_set_task_id( sw_get_current_task_id() );
+    cielID *id = cielID_create( sw_get_current_task_id() );
+
+    _ciel_set_task_id( id );
+
+    cielID_free( id );
+
     return blcr_init_framework() && sw_init();
 
 }
 
 cldthread *cldthread_smart_create( cldvalue *(*const fptr)(void *), void *const arg0, char *const group_id ){
 
-    char *path;
-
-    char *thread_task_id;
-    char *thread_output_id;
+    cielID *thread_task_id;
+    cielID *thread_output_id;
 
     static int _spawn_count = 0;
 
-    cldthread *result;
-
-    result = NULL;
-
     /* Create values for the new task */
 
-    if(group_id != NULL){
+    thread_task_id = cielID_create2( (group_id != NULL)
+                                     ? sw_generate_task_id( "cldthread", group_id, arg0 )
+                                     : sw_generate_task_id( "cldthread", sw_get_current_task_id(), (void *)++_spawn_count ) );
 
-        thread_task_id = sw_generate_task_id( "cldthread", group_id, arg0 );
+    thread_output_id = cielID_create2( sw_generate_output_id( thread_task_id->id_str ) );
 
-    } else {
+    int result = _ciel_spawn_chkpt_task( thread_task_id, thread_output_id, NULL, 0, 0 );
 
-        thread_task_id = sw_generate_task_id( "cldthread", sw_get_current_task_id(), (void *)++_spawn_count );
+    if( result < 0 ){ /* resumed process */
 
-    }
+        _cldthread_submit_output( fptr( arg0 ) );
+        exit( EXIT_SUCCESS );
 
-    thread_output_id = sw_generate_output_id( thread_task_id );
+    } else if ( result > 0 ) { /* checkpoint succeeded */
 
-    asprintf( &path, "/tmp/%s.%s.checkpoint.thread", sw_get_current_task_id(), thread_task_id );
+        /* continue on our merry way */
 
-    if( _cldthread_task_checkpoint( thread_task_id, NULL, path, fptr, arg0 ) ){
+    } else { /* error when attempting to checkpoint */
 
-        cJSON *jsonenc_dpnds;
-        cJSON *jsonenc_args;
-        char *tmp;
-
-        swref *chkpt_ref;
-        swref *args_ref;
-
-        /* Post arguments as data in the block store */
-
-        jsonenc_args = cJSON_CreateObject();
-
-        chkpt_ref = sw_move_file_to_store( NULL, path, NULL );
-
-        cJSON_AddItemToObject( jsonenc_args, "checkpoint", swref_serialize( chkpt_ref ) );
-        swref_free( chkpt_ref );
-
-        tmp = cJSON_PrintUnformatted( jsonenc_args );
-        cJSON_Delete( jsonenc_args );
-
-        args_ref = sw_save_string_to_store( NULL, NULL, tmp );
-        free( tmp );
-
-        /* Then create the task */
-
-        jsonenc_dpnds = cJSON_CreateObject();
-        cJSON_AddItemToObject( jsonenc_dpnds, "_args", swref_serialize( args_ref ) );
-        swref_free( args_ref );
-
-        if( sw_spawntask( thread_task_id,
-                          thread_output_id,
-                          sw_get_current_task_id(),
-                          "cldthread",
-                          jsonenc_dpnds,
-                          0 )                          ) {
-
-            result = cielID_create( thread_output_id );
-
-        };
-
-        cJSON_Delete( jsonenc_dpnds );
-
-
-    } else {
-
-        /* There has been an error... */
-
-        perror( "Couldn't checkpoint process so we should perhaps resort to local threading.\n" );
+        fprintf( stderr, "cldthread_smart_create: error while attempting to spawn cloud thread\n" );
+        exit( EXIT_FAILURE );
 
     }
 
-    free( thread_task_id );
-    free( thread_output_id );
+    cielID_free( thread_task_id );
 
-    free( path );
-
-    return result;
+    return thread_output_id;
 
 }
-
-
-size_t cldthread_joins( cielID *id[], size_t const count ){
-
-    size_t i;
-
-    for( i = 0; i < count; i++ ){
-
-        #if DEBUG
-        printf("cldthread_joins(): attempting to open stream (%s)\n", id[i]->id_str );
-        #endif
-
-        if( cielID_read_stream(id[i]) < 0 ){
-
-            if(_cldthread_continuation_for_inputs( id, count ) >= 0) break;
-            i--;
-
-        }
-
-    }
-
-    return i;
-
-}
-
 
 int cldthread_open_result_as_stream( void ){
 
@@ -153,7 +80,7 @@ int cldthread_open_result_as_stream( void ){
 swref *cldthread_result_as_ref( cldthread *const thread ){
 
     swref *ref = swref_at_id( thread );
-    cielID_close_stream( thread );
+    cielID_close_fd( thread );
 
     return ref;
 

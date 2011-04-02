@@ -69,8 +69,12 @@
 				</Compiler>
 			</Target>
 		</Build>
+		<VirtualTargets>
+			<Add alias="All" targets="libCloudThreads;helloworld;pi;fib;prodcons;linkedlist;" />
+		</VirtualTargets>
 		<Compiler>
 			<Add option="-Wall" />
+			<Add option="-g" />
 			<Add directory="lib" />
 		</Compiler>
 		<Linker>
@@ -101,6 +105,10 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="cielID.h" />
+		<Unit filename="ciel_checkpoint.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="ciel_checkpoint.h" />
 		<Unit filename="cldptr.c">
 			<Option compilerVar="CC" />
 		</Unit>

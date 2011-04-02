@@ -79,7 +79,7 @@ cldvalue *ListLinker( void *arg ){
 
         cldthread_join( thread );
 
-        result = cldvalue_ptr( cldlink_create( (count + 1), cldthread_result_as_cldptr( thread ) ) );
+        result = cldvalue_ptr( cldlink_create( (count + 1), cldvalue_to_cldptr( cldthread_result_as_cldvalue( thread ) ) ) );
 
     } else {
 

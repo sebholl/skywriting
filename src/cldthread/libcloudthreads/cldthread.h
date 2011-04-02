@@ -18,15 +18,15 @@ const cldthread *cldthread_current_thread( void );
 #define cldthread_create( fptr, arg0 ) cldthread_smart_create( fptr, arg0, NULL )
 cldthread *cldthread_smart_create( cldvalue *(*fptr)(void *), void *arg0, char *group_id );
 
-#define cldthread_join( thread ) cldthread_joins( &thread, 1 )
-size_t cldthread_joins( cielID *id[], size_t count );
+#define cldthread_join( thread ) cldthread_joins( &(thread), 1 )
+#define cldthread_joins( threads, count ) cielID_read_streams( threads, count )
 
 int cldthread_open_result_as_stream( void );
 int cldthread_close_result_stream( void );
 
 swref *cldthread_result_as_ref( cldthread *thread );
 cldvalue *cldthread_result_as_cldvalue( cldthread *thread );
-#define cldthread_result_as_fd( thread ) cielID_read_stream( thread )
+#define cldthread_result_as_fd( thread ) cielID_open_fd( thread )
 
 /* Returning values from cloud apps */
 

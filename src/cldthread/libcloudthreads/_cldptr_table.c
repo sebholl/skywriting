@@ -34,13 +34,22 @@ static cielID *_cldptr_heap_to_cielID( int const heapkey ){
 
 }
 
+static void _cldptr_table_put( int const key, void *const baseptr ){
 
-static void *_cldptr_table_put( int key ){
+    khash_t(Int2Ptr) *const table = _cldptr_table();
+
+    int ret;
+    khiter_t i = kh_put( Int2Ptr, table, key, &ret );
+
+    kh_value( table, i ) = baseptr;
+
+}
+
+
+static void *_cldptr_table_pull( int key ){
 
     void *result = NULL;
     struct stat buf;
-
-    printf( "Retrieving heap offset for %d from cielID\n", key );
 
     cielID *id = _cldptr_heap_to_cielID( key );
 
@@ -50,7 +59,7 @@ static void *_cldptr_table_put( int key ){
 
         result = mmap( NULL, buf.st_size, PROT_READ, MAP_PRIVATE, fd, 0 );
 
-        kh_put( Int2Ptr, _cldptr_table(), key, result );
+        _cldptr_table_put( key, result );
 
     } else {
 
@@ -76,12 +85,17 @@ static void *_cldptr_table_get( int key ){
 
     if( i != kh_end( table ) ){
 
-        printf( "Retrieving heap offset for %d directly from table\n", key );
+        #if DEBUG
+        fprintf( stderr, "_cldptr_table_get(): retrieving heap offset for %d directly from table\n", key );
+        #endif
         return kh_value( _cldptr_table(), i );
 
     }
 
-    return _cldptr_table_put( key );
+    #if DEBUG
+    fprintf( stderr, "_cldptr_table_get(): retrieving heap offset for %d directly from cielID\n", key );
+    #endif
+    return _cldptr_table_pull( key );
 
 }
 

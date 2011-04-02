@@ -20,15 +20,18 @@ void cielID_free( cielID *id );
 
 /* Reading from streams */
 
-int cielID_read_stream( cielID *id );
+int cielID_open_fd( cielID *id );
 
-char *cielID_dump_stream( cielID *id, size_t *size_out );
-
-void cielID_close_stream( cielID *id );
-
-
-/* API for creating streams */
+void cielID_close_fd( cielID *id );
 
 int cielID_publish_stream( cielID *id );
 
 int cielID_finalize_stream( cielID *id );
+
+
+int cielID_read_stream( cielID *id );
+
+size_t cielID_read_streams( cielID *id[], size_t const count );
+
+
+char *cielID_dump_stream( cielID *id, size_t *size_out );

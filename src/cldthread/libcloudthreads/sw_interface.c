@@ -109,7 +109,7 @@ int sw_publish_ref( const char *const master_loc, const char *const task_id, con
     curl_easy_setopt( handle, CURLOPT_FAILONERROR, 1 );
 
     #if VERBOSE
-    printf("Attempting to publish ref for task \"%s\".\n", task_id );
+    printf("sw_publish_ref(): attempting to publish ref for task \"%s\".\n", task_id );
     curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
     #endif
 
@@ -200,8 +200,8 @@ int sw_abort_task( const char *const master_loc, const char *const task_id ){
 
     curl_easy_setopt( handle, CURLOPT_FAILONERROR, 1 );
 
-    #if VERBOSE || DEBUG
-    printf("Attempting to abort task \"%s\".\n", task_id );
+    #if VERBOSE
+    printf("sw_abort_task(): attempting to abort task \"%s\".\n", task_id );
     curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
     #endif
 
@@ -364,7 +364,7 @@ swref *sw_move_file_to_store( const char *const worker_url, const char *const fi
 
     swref *result = NULL;
 
-    char *_id = (id == NULL) ? sw_generate_new_task_id( "cldthread", sw_get_current_task_id(), "file" ) : (char *)id;
+    char *_id = (id == NULL) ? sw_generate_new_id( "cldthread", sw_get_current_task_id(), "file" ) : (char *)id;
 
     if( (worker_url == NULL) || ( strcasecmp( worker_url, sw_get_current_worker_loc() ) == 0) ){
 
@@ -406,7 +406,7 @@ swref *sw_save_data_to_store( const char *const worker_loc, const char *const id
 
     swref *result = NULL;
 
-    char *_id = (id == NULL) ? sw_generate_new_task_id( "cldthread", sw_get_current_task_id(), "string" )
+    char *_id = (id == NULL) ? sw_generate_new_id( "cldthread", sw_get_current_task_id(), "string" )
                              : (char *)id;
 
     if( (worker_loc == NULL) || ( strcasecmp( worker_loc, sw_get_current_worker_loc() ) == 0) ){
@@ -441,7 +441,7 @@ swref *sw_save_data_to_store( const char *const worker_loc, const char *const id
 
 }
 
-char *sw_generate_new_task_id( const char *const handler, const char *const group_id, const char *const desc ){
+char *sw_generate_new_id( const char *const handler, const char *const group_id, const char *const desc ){
 
     static int _count = 0;
 

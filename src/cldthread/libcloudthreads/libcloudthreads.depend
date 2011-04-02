@@ -170,32 +170,40 @@
 1297977441 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/cJSON.h
 	<stdint.h>
 
-1298218827 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/cldthread.c
-	<stdio.h>
+1301708265 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/cldthread.c
 	<stdlib.h>
 	<string.h>
-	"cJSON.h"
+	<cJSON/cJSON.h>
+	"swref.h"
+	"ciel_checkpoint.h"
 	"cldthread.h"
 	"_cldthread.c"
 
-1297909217 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/cldthread.h
-	"swref.h"
+1301708265 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/cldthread.h
+	"cielID.h"
 	"cldvalue.h"
 
-1298219033 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/swref.h
+1301645023 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/swref.h
 	<stdint.h>
+	<cJSON/cJSON.h>
+	"cielID.h"
 	"cldvalue.h"
-	"cJSON.h"
 
-1298221595 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/cldvalue.h
-	"cJSON.h"
+1301709221 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/cldvalue.h
+	<stdlib.h>
 	<inttypes.h>
+	<cJSON/cJSON.h>
+	"cldptr.h"
+	"swref.h"
 
-1298218755 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/_cldthread.c
+1301707637 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/_cldthread.c
+	<stdio.h>
+	"common/curl_helper_functions.h"
+	"cldptr.h"
 	"blcr_interface.h"
 	"sw_interface.h"
 
-1298221744 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/sw_interface.h
+1301703785 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/sw_interface.h
 	"swref.h"
 
 1298226328 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/cldvalue.c
@@ -216,7 +224,7 @@
 
 1294516023 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/curl_helper_functions.h
 
-1297913823 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/sw_interface.c
+1301703785 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/sw_interface.c
 	<stdio.h>
 	<stdlib.h>
 	<string.h>
@@ -224,14 +232,16 @@
 	<sys/types.h>
 	<sys/stat.h>
 	<unistd.h>
-	"curl_helper_functions.h"
+	"common/curl_helper_functions.h"
 	"sw_interface.h"
 	"_sw_interface.c"
 
-1297910781 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/_sw_interface.c
-	<openssl/sha.h>
+1301620051 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/_sw_interface.c
+	<sys/stat.h>
+	<fcntl.h>
+	"common/sha_helper_functions.h"
 
-1298218827 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/swref.c
+1301645035 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/swref.c
 	<stdlib.h>
 	<string.h>
 	<stdio.h>
@@ -262,5 +272,95 @@
 	<unistd.h>
 	<string.h>
 	"../sw_interface.h"
+	"../cldthread.h"
+
+1301708265 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/cielID.c
+	<stdio.h>
+	<stdio.h>
+	<stdlib.h>
+	<string.h>
+	<sys/stat.h>
+	<fcntl.h>
+	<unistd.h>
+	"common/curl_helper_functions.h"
+	"sw_interface.h"
+	"swref.h"
+	"ciel_checkpoint.h"
+	"cielID.h"
+
+1301625199 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/common/curl_helper_functions.h
+
+1297977441 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/lib/cJSON/cJSON.h
+	<stdint.h>
+
+1301708265 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/cielID.h
+	<stdlib.h>
+
+1301706779 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/cldptr.h
+	<openssl/sha.h>
+	<cJSON/cJSON.h>
+	"cielID.h"
+
+1301707417 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/ciel_checkpoint.h
+	"cielID.h"
+
+1301708265 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/ciel_checkpoint.c
+	<stdio.h>
+	<stdio.h>
+	<string.h>
+	"cielID.h"
+	"cldptr.h"
+	"sw_interface.h"
+	"blcr_interface.h"
+
+1301707616 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/cldptr.c
+	<stdio.h>
+	"cldptr.h"
+	"_cldptr_table.c"
+
+1301708265 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/_cldptr_table.c
+	<sys/mman.h>
+	<sys/types.h>
+	<sys/stat.h>
+	<unistd.h>
+	<klib/khash.h>
+
+1301433926 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/lib/klib/khash.h
+	"khash.h"
+	<stdlib.h>
+	<string.h>
+	<limits.h>
+
+1301625166 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/common/curl_helper_functions.c
+	<stdio.h>
+	<stdlib.h>
+	<string.h>
+	<curl/curl.h>
+	"curl_helper_functions.h"
+
+1301624867 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/common/sha_helper_functions.c
+	<stdlib.h>
+	<stdio.h>
+	"sha_helper_functions.h"
+
+1301621093 /home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/common/sha_helper_functions.h
+	<openssl/sha.h>
+
+1297977338 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/lib/cJSON/cJSON.c
+	<string.h>
+	<stdio.h>
+	<math.h>
+	<stdlib.h>
+	<float.h>
+	<limits.h>
+	<ctype.h>
+	<inttypes.h>
+	"cJSON.h"
+
+1301627786 source:/home/sebhollington/Desktop/SkyWriting/skywriting/src/cldthread/libcloudthreads/tests/prodcons.c
+	<stdio.h>
+	<stdlib.h>
+	<unistd.h>
+	<string.h>
 	"../cldthread.h"
 
