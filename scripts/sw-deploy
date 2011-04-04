@@ -72,7 +72,7 @@ do
     -h|*)
       echo "Deploys Skywriting and Ciel to a specified set of machines."
       echo ""
-      echo "usage: sw-deploy-multi [-f cluster-file|(-i|-k) key|-r swroot|-u swuser|-v]"
+      echo "usage: sw-deploy [-f cluster-file|(-i|-k) key|-r swroot|-u swuser|-v]"
       echo "-f: the file listing the machines in the cluster, one per line."
       echo "    If '--' is passed, STDIN is assumed."
       echo "-i|-k: the private key to use for authentication to cluster machines"
@@ -97,7 +97,7 @@ I=0
 cat $SOURCE | while myLine=`line`
 do
     echo -n "Deploying instance $I: "
-    ./sw-deploy.sh $myLine $KEY $SWUSER $SWROOT $GITUSER
+    ./sw-deploy-helper.sh $myLine $KEY $SWUSER $SWROOT $GITUSER
     echo $myLine
     I=`expr $I + 1`
 done

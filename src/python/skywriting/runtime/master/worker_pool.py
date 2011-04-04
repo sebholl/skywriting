@@ -16,12 +16,12 @@ from cherrypy.process import plugins
 from Queue import Queue
 from threading import Condition, RLock
 from skywriting.runtime.block_store import SWReferenceJSONEncoder
-import random
 import datetime
 import simplejson
 import httplib2
 import uuid
 import cherrypy
+import random
 import logging
 
 class FeatureQueues:
@@ -105,6 +105,13 @@ class WorkerPool(plugins.SimplePlugin):
         self.bus.unsubscribe('worker_ping', self.worker_ping)
         self.bus.unsubscribe('stop', self.server_stopping) 
         
+    def reset(self):
+        self.idle_worker_queue = Queue()
+        self.workers = {}
+        self.netlocs = {}
+        self.idle_set = set()
+        self.feature_queues = FeatureQueues()
+        
     def allocate_worker_id(self):
         return str(uuid.uuid1())
         
@@ -149,7 +156,8 @@ class WorkerPool(plugins.SimplePlugin):
         
     def get_idle_workers(self):
         with self._lock:
-            return map(lambda x: self.workers[x], self.idle_set)
+            worker_list = map(lambda x: self.workers[x], self.idle_set)
+        return worker_list
     
     def execute_task_on_worker(self, worker, task):
         with self._lock:
@@ -163,7 +171,7 @@ class WorkerPool(plugins.SimplePlugin):
             httplib2.Http().request("http://%s/task/" % (worker.netloc), "POST", simplejson.dumps(task.as_descriptor(), cls=SWReferenceJSONEncoder), )
         except:
             self.worker_failed(worker)
-
+        
     def notify_task_streams_done(self, worker, task):
         try:
             httplib2.Http().request("http://%s/task/%s/streams_done" % (worker.netloc, task.task_id), "POST", "done")

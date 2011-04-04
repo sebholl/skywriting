@@ -83,12 +83,16 @@ class Worker(plugins.SimplePlugin):
         self.log_lock = Lock()
         self.log_condition = Condition(self.log_lock)
 
-        self.cherrypy_conf = { "/skyweb": { "log.screen": True }, "/stdlib": { "log.screen": True }  }
+        self.cherrypy_conf = {}
+
+        cherrypy.config.update({"server.thread_pool" : 20})
+
+
         
         if options.staticbase is not None:
-            self.cherrypy_conf["/skyweb"] = { "log.screen": True, "tools.staticdir.on": True, "tools.staticdir.dir": options.staticbase }
+            self.cherrypy_conf["/skyweb"] = { "tools.staticdir.on": True, "tools.staticdir.dir": options.staticbase }
         if options.lib is not None:
-            self.cherrypy_conf["/stdlib"] = { "log.screen": True, "tools.staticdir.on": True, "tools.staticdir.dir": options.lib }
+            self.cherrypy_conf["/stdlib"] = { "tools.staticdir.on": True, "tools.staticdir.dir": options.lib }
 
 
 
@@ -114,15 +118,9 @@ class Worker(plugins.SimplePlugin):
         self.pinger.poke()
 
     def start_running(self):
+
         cherrypy.engine.start()
-        application = cherrypy.tree.mount(self.server_root, "", self.cherrypy_conf)
-        cherrypy.config.update({'log.screen': True})
-        
-        error_log = logging.getLogger("cherrypy.error")
-        access_log = logging.getLogger("cherrypy.access")
-        error_log.setLevel(logging.DEBUG)
-        access_log.setLevel(logging.DEBUG)
- 
+        cherrypy.tree.mount(self.server_root, "", self.cherrypy_conf)
         if hasattr(cherrypy.engine, "signal_handler"):
             cherrypy.engine.signal_handler.subscribe()
         if hasattr(cherrypy.engine, "console_control_handler"):

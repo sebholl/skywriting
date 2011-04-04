@@ -160,6 +160,11 @@ class SelectableEventQueue:
     def get_select_fds(self):
         return [self.event_pipe_read], [], []
 
+    # Called after all event-posting and dispatching is complete
+    def cleanup(self):
+        os.close(self.event_pipe_read)
+        os.close(self.event_pipe_write)
+
 class pycURLThread:
 
     def __init__(self):
@@ -192,12 +197,16 @@ class pycURLThread:
     def add_context(self, ctx):
         self.event_queue.post_event(lambda: self._add_context(ctx))
 
-    def _remove_context(self, ctx):
+    def _remove_context(self, ctx, e):
         cherrypy.log.error("Event source unregistered", "CURL_FETCH", logging.INFO)
         self.contexts.remove(ctx)
+        e.set()
 
+    # Synchronous so that when this call returns the caller definitely will not get any more callbacks
     def remove_context(self, ctx):
-        self.event_queue.post_event(lambda: self._remove_context(ctx))
+        e = threading.Event()
+        self.event_queue.post_event(lambda: self._remove_context(ctx, e))
+        e.wait()
 
     def _stop_thread(self):
         self.dying = True
@@ -445,8 +454,9 @@ class StreamTransferGroup(WaitableTransferGroup):
 
     def cleanup(self, block_store):
         for handle in self.handles:
-            handle.save_result(block_store)
+            # Cleanup must happen first, because it typically closes the file that we are storing in the block store.
             handle.cleanup()
+            handle.save_result(block_store)
         
     def get_failed_refs(self):
         failure_bindings = {}
@@ -490,14 +500,14 @@ class StreamTransferContext(pycURLContextCallbacks):
                     self.response_code = int(match_obj.group(1))
             if _str.startswith("Pragma") != -1 and _str.find("streaming") != -1:
                 self.response_had_stream = True
+
+            # XXX: If response does not contain a Content-Length header, 
+            #      self.request_length will be set to None.
             match_obj = length_regex.match(_str)
             if match_obj is not None:
                 self.request_length = int(match_obj.group(1))
 
         def success(self):
-            cherrypy.log.error("Fetch %s succeeded (length %d)" 
-                               % (self.description, self.request_length), 
-                               "CURL_FETCH", logging.DEBUG)
             self.ctx.request_succeeded()
 
         def failure(self, errno, errstr):
@@ -764,7 +774,7 @@ class StreamTransferContext(pycURLContextCallbacks):
         else:
             req_bytes = (req_end - req_start) + 1
         rx_length = self.current_fetch.request_length
-        if req_bytes is None or req_bytes > rx_length:
+        if req_bytes is None or rx_length is None or req_bytes > rx_length:
             # Potentially the end
             if not self.current_fetch.response_had_stream:
                 self.report_completion(True)
@@ -859,6 +869,7 @@ class StreamTransferContext(pycURLContextCallbacks):
         os.unlink(self.fifo_name)
         os.rmdir(self.fifo_dir)
         self.multi.remove_context(self)
+        self.event_queue.cleanup()
 
     def save_result(self, block_store):
         # Called from arbitrary thread, but only after all cURL callbacks have completed
@@ -967,7 +978,7 @@ class BlockStore(plugins.SimplePlugin):
     
     def store_object(self, object, encoder, id):
         """Stores the given object as a block, and returns a swbs URL to it."""
-        self.object_cache[id] = object
+        #self.object_cache[id] = object
         with open(self.filename(id), "wb") as object_file:
             self.encoders[encoder](object, object_file)
             file_size = object_file.tell()

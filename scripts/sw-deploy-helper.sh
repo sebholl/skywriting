@@ -24,6 +24,7 @@
 TARGETHOST=$1
 PRIVKEY=$2
 #SRG_ROOT_PW= # set this in environment variable
+BOOTSTRAP_SCRIPT="sw-deploy-local.sh"
 
 if [[ $1 == '' || $2 == '' ]]; then
     echo "usage sw-deploy.sh hostname privkey [sw-user] [sw-user-pw]"
@@ -32,6 +33,9 @@ fi
 
 if [[ $3 == '' ]]; then
     SWUSER='root'
+elif [[ $2 == 'scc' ]]; then
+    SWUSER='root'
+    BOOTSTRAP_SCRIPT="sw-deploy-local-scc.sh"
 else
     SWUSER=$3
 fi
@@ -60,20 +64,22 @@ echo "Deploying to $TARGETHOST..."
 # install private key for non-EC2 case
 # this requires some awkward putty hackery as ssh does not
 # allow password-based login from non-interactive terminals
-if [[ $3 != 'ec2' ]]; then
-    echo y | plink -pw $SWUSERPW $SWUSER@$TARGETHOST 'mkdir .ssh'
-    pscp -q -pw $SWUSERPW $PRIVKEY.pub $SWUSER@$TARGETHOST:.ssh/authorized_keys
-else
+if [[ $3 == 'scc' ]]; then
+    sleep 1
+elif [[ $3 == 'ec2' ]]; then
     # EC2 case - just log in as "ubuntu" user and copy authorized_keys
     USER="ubuntu"
     ssh -o StrictHostKeyChecking=no -f -i $PRIVKEY $USER@$TARGETHOST "sudo cp ~$USER/.ssh/authorized_keys /root/.ssh/"
     SWUSER="root"
     sleep 5
+else
+    echo y | plink -pw $SWUSERPW $SWUSER@$TARGETHOST 'mkdir -p .ssh'
+    pscp -q -pw $SWUSERPW $PRIVKEY.pub $SWUSER@$TARGETHOST:.ssh/authorized_keys
 fi
 
 # run remote deployment script
-scp -o StrictHostKeyChecking=no -q -i $PRIVKEY sw-deploy-local.sh $SWUSER@$TARGETHOST:
-ssh -o StrictHostKeyChecking=no -f -i $PRIVKEY $SWUSER@$TARGETHOST "~$SWUSER/sw-deploy-local.sh $SWROOT $GITUSER 1>&2 2>/dev/null"
+scp -o StrictHostKeyChecking=no -q -i $PRIVKEY $BOOTSTRAP_SCRIPT $SWUSER@$TARGETHOST:
+ssh -o StrictHostKeyChecking=no -f -i $PRIVKEY $SWUSER@$TARGETHOST "~$SWUSER/$BOOTSTRAP_SCRIPT $SWROOT $GITUSER 1>&2 2>/dev/null"
 
 # output
 echo "done!"

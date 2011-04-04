@@ -16,9 +16,10 @@ from __future__ import with_statement
 from subprocess import PIPE
 from skywriting.runtime.references import \
     SWRealReference, SW2_FutureReference, SW2_ConcreteReference,\
-    SWDataValue, SW2_StreamReference
+    SWDataValue, SW2_StreamReference, SW2_SweetheartReference
 from skywriting.runtime.exceptions import FeatureUnavailableException,\
-    ReferenceUnavailableException, BlameUserException, MissingInputException
+    ReferenceUnavailableException, BlameUserException, MissingInputException,\
+    RuntimeSkywritingError
 import logging
 import shutil
 import subprocess
@@ -28,6 +29,7 @@ import cherrypy
 import threading
 import time
 from datetime import datetime
+from skywriting.runtime.block_store import STREAM_RETRY
 from errno import EPIPE
 
 running_children = {}
@@ -57,7 +59,7 @@ class ExecutionFeatures:
                           'dotnet': DotNetExecutor,
                           'c': CExecutor,
                           'grab': GrabURLExecutor,
-                          'sync': SyncExecutor }
+                          'sync': SyncExecutor}
     
     def all_features(self):
         return self.executors.keys()
@@ -158,7 +160,20 @@ class ProcessRunningExecutor(SWExecutor):
             self.stream_output = args['stream_output']
         except KeyError:
             self.stream_output = False
-        
+
+        try:
+            self.eager_fetch = args['eager_fetch']
+        except KeyError:
+            self.eager_fetch = False
+
+        try:
+            self.make_sweetheart = args['make_sweetheart']
+            if not isinstance(self.make_sweetheart, list):
+                self.make_sweetheart = [self.make_sweetheart]
+        except KeyError:
+            self.make_sweetheart = []
+
+
         self._lock = threading.Lock()
         self.proc = None
         self.transfer_ctx = None
@@ -171,7 +186,11 @@ class ProcessRunningExecutor(SWExecutor):
                 self.transfer_ctx.notify_streams_done()
 
     def _execute(self, block_store, task_id):
-        file_inputs, transfer_ctx = self.get_filenames(block_store, self.input_refs)
+        if self.eager_fetch:
+            file_inputs = self.get_filenames_eager(block_store, self.input_refs)
+            _, transfer_ctx = self.get_filenames(block_store, [])
+        else:
+            file_inputs, transfer_ctx = self.get_filenames(block_store, self.input_refs)
         with self._lock:
             self.transfer_ctx = transfer_ctx
         file_outputs = []
@@ -201,7 +220,20 @@ class ProcessRunningExecutor(SWExecutor):
         if "trace_io" in self.debug_opts:
             transfer_ctx.log_traces()
 
-        transfer_ctx.cleanup(block_store)
+        # We must do this before publishing, so that whole files are in the block store.
+        with self._lock:
+            transfer_ctx.cleanup(block_store)
+            self.transfer_ctx = None
+
+        # If we have fetched any objects to this worker, publish them at the master.
+        extra_publishes = {}
+        for ref in self.input_refs:
+            if isinstance(ref, SW2_ConcreteReference) and not block_store.netloc in ref.location_hints:
+                extra_publishes[ref.id] = SW2_ConcreteReference(ref.id, ref.size_hint, [block_store.netloc])
+        for sweetheart in self.make_sweetheart:
+            extra_publishes[sweetheart.id] = SW2_SweetheartReference(sweetheart.id, sweetheart.size_hint, block_store.netloc, [block_store.netloc])
+        if len(extra_publishes) > 0:
+            self.master_proxy.publish_refs(task_id, extra_publishes)
 
         failure_bindings = transfer_ctx.get_failed_refs()
         if failure_bindings is not None:
@@ -293,6 +325,10 @@ class EnvironmentExecutor(ProcessRunningExecutor):
     def __init__(self, args, continuation, expected_output_ids, master_proxy, fetch_limit=None):
         ProcessRunningExecutor.__init__(self, args, continuation, expected_output_ids, master_proxy, fetch_limit)
         try:
+            self.env = args['env']
+        except KeyError:
+            self.env = {}
+        try:
             self.command_line = args['command_line']
         except KeyError:
             raise BlameUserException('Incorrect arguments to the env executor: %s' % repr(args))
@@ -317,7 +353,7 @@ class EnvironmentExecutor(ProcessRunningExecutor):
             
         proc = subprocess.Popen(map(str, self.command_line), env=self.env, close_fds=True)
 
-        _ = proc.stdout.read(1)
+        #_ = proc.stdout.read(1)
         #print 'Got byte back from Executor'
 
         transfer_ctx.consumers_attached()
@@ -389,8 +425,8 @@ class FilenamesOnStdinExecutor(ProcessRunningExecutor):
                         anything_read = True
                     if c == ",":
                         if message[0] == "C":
-                            timestamp = float(message[1:])
-                            cherrypy.engine.publish("worker_event", "Process log %f Computing" % timestamp)
+                           timestamp = float(message[1:])
+                           cherrypy.engine.publish("worker_event", "Process log %f Computing" % timestamp)
                         elif message[0] == "I":
                             try:
                                 params = message[1:].split("|")
@@ -451,7 +487,7 @@ class JavaExecutor(FilenamesOnStdinExecutor):
         process_args.extend(["uk.co.mrry.mercator.task.JarTaskLoader", self.class_name])
         process_args.extend(["file://" + x for x in self.jar_filenames])
         return process_args
-
+        
 class DotNetExecutor(FilenamesOnStdinExecutor):
 
     def __init__(self, args, continuation, expected_output_ids, master_proxy, fetch_limit=None):
