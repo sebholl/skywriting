@@ -46,15 +46,12 @@ cldvalue *CloudProducer(void *_arg){
 
     int fd = cldthread_open_result_as_stream();
 
+    dup2( fd, 1 );
+
     int i;
-
-    int len;
-    char *str;
-
-    for( i = 10; i > 0; i-- ){
-        len = asprintf( &str, "%d --> I can count!!!! (%d)\n", i, fd );
-        write( 1, str, len );
-        write( fd, str, len );
+    for( i = 1; i <= 10; ++i ){
+        printf( "%d --> I can count!!!!\n", i );
+        fflush( stdout );
         sleep(1);
     }
 
@@ -69,7 +66,7 @@ void CloudConsumer( int fd ){
 
     printf("Printing consumed characters from fd (%d)...\n", fd);
 
-    while( read( fd, &byte, sizeof( char ) ) != 0 ) printf("%c", byte);
+    while( read( fd, &byte, sizeof( char ) ) != 0 ) { printf("%c", byte); fflush(stdout); }
 
     printf("Finished consuming characters...\n");
 
