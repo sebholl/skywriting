@@ -17,12 +17,16 @@
 		<Project filename="tests/prodcons.cbp">
 			<Depends filename="libcloudthreads/libcloudthreads.cbp" />
 		</Project>
-		<Project filename="tests/tests.cbp" active="1">
+		<Project filename="tests/mandelbrot.cbp" active="1">
+			<Depends filename="libcloudthreads/libcloudthreads.cbp" />
+		</Project>
+		<Project filename="tests/tests.cbp">
 			<Depends filename="tests/fib.cbp" />
 			<Depends filename="tests/helloworld.cbp" />
 			<Depends filename="tests/linkedlist.cbp" />
 			<Depends filename="tests/pi.cbp" />
 			<Depends filename="tests/prodcons.cbp" />
+			<Depends filename="tests/mandelbrot.cbp" />
 		</Project>
 	</Workspace>
 </CodeBlocks_workspace_file>

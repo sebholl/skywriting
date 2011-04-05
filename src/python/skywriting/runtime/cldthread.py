@@ -178,7 +178,7 @@ class CloudAppExecutor(_CloudProcessCommonExecutor):
         
     def get_process_args(self):
         cherrypy.log.error("CloudAppExecutor package path : %s" % self.filenames, "CloudAppExecutor", logging.INFO)
-        return self.filenames + self.app_args
+        return self.filenames + map( str, self.app_args )
     
     def before_execute(self, block_store):
         cherrypy.log.error("Running CloudAppExecutor for : %s" % self.app_ref, "CloudAppExecutor", logging.INFO)
