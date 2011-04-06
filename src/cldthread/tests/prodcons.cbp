@@ -27,9 +27,9 @@
 		</Compiler>
 		<Linker>
 			<Add library="../libcloudthreads/bin/libcloudthreads.a" />
-			<Add library="libcr" />
-			<Add library="libssl" />
-			<Add library="libcurl" />
+			<Add library="cr" />
+			<Add library="ssl" />
+			<Add library="curl" />
 		</Linker>
 		<Unit filename="prodcons.c">
 			<Option compilerVar="CC" />

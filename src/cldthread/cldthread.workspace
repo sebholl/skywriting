@@ -2,7 +2,7 @@
 <CodeBlocks_workspace_file>
 	<Workspace title="Workspace">
 		<Project filename="libcloudthreads/libcloudthreads.cbp" />
-		<Project filename="tests/fib.cbp">
+		<Project filename="tests/fib.cbp" active="1">
 			<Depends filename="libcloudthreads/libcloudthreads.cbp" />
 		</Project>
 		<Project filename="tests/helloworld.cbp">
@@ -17,7 +17,7 @@
 		<Project filename="tests/prodcons.cbp">
 			<Depends filename="libcloudthreads/libcloudthreads.cbp" />
 		</Project>
-		<Project filename="tests/mandelbrot.cbp" active="1">
+		<Project filename="tests/mandelbrot.cbp">
 			<Depends filename="libcloudthreads/libcloudthreads.cbp" />
 		</Project>
 		<Project filename="tests/tests.cbp">

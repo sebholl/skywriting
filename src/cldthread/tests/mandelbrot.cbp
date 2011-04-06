@@ -27,10 +27,10 @@
 		</Compiler>
 		<Linker>
 			<Add library="../libcloudthreads/bin/libcloudthreads.a" />
-			<Add library="libcr" />
-			<Add library="libssl" />
-			<Add library="libcurl" />
-			<Add library="libpnglite" />
+			<Add library="cr" />
+			<Add library="ssl" />
+			<Add library="curl" />
+			<Add library="pnglite" />
 		</Linker>
 		<Unit filename="mandelbrot.c">
 			<Option compilerVar="CC" />
