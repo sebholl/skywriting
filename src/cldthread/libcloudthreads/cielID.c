@@ -36,11 +36,14 @@ cielID * cielID_create2( char *id_str ){
 }
 
 
-int cielID_open_fd( cielID *id ){
+static int cielID_open_fd( cielID *id ){
 
-    if(id->fd < 0) id->fd = sw_open_fd_for_id( id->id_str );
+    if( id->fd < 0 || fcntl(id->fd, F_GETFL) == -1 ){
+        close( id->fd );
+        id->fd = sw_open_fd_for_id( id->id_str );
+    }
 
-    return id->fd;
+    return dup(id->fd);
 
 }
 
@@ -50,7 +53,7 @@ void cielID_close_fd( cielID *id ){
     if(id->fd >= 0){
 
         close( id->fd );
-        id->fd = 0;
+        id->fd = -1;
 
     }
 
@@ -73,7 +76,7 @@ char *cielID_dump_stream( cielID *id, size_t * const size_out ){
 
     char *result = NULL;
 
-    int fd = cielID_open_fd( id );
+    int fd = cielID_read_stream( id );
 
     #ifdef DEBUG
     printf( "cielID_dump_stream(): attempting to dump fd (%d) for id (%s)\n", fd, id->id_str );

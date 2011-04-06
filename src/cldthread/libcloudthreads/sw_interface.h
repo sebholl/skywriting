@@ -3,7 +3,6 @@
 #include "swref.h"
 
 #define VERBOSE 0
-#define ALLOW_NONDETERMINISM 0
 
 /* Initialization */
 
@@ -21,15 +20,6 @@ int sw_spawntask( const char *new_task_id,
 
 
 int sw_publish_ref( const char *master_loc, const char *task_id, const swref *ref );
-
-#if ALLOW_NONDETERMINISM
-
-cJSON *sw_query_info_for_output_id( const char *output_id );
-
-int sw_abort_task( const char *master_url, const char *task_id );
-
-#endif
-
 
 /* Block-store access */
 

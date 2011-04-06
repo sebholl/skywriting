@@ -35,7 +35,8 @@ int cldthread_init( void ){
 
 }
 
-cldthread *cldthread_smart_create( cldvalue *(*const fptr)(void *), void *const arg, char *const group_id ){
+
+cldthread *cldthread_smart_create( char *const group_id, cldvalue *(*const fptr)(void *), void *const arg ){
 
     cielID *thread_task_id;
     cielID *thread_output_id;
@@ -86,7 +87,7 @@ static cldvalue *_posixstub( void *arg ){
 cldthread *cldthread_posix_create( void *(*fptr)(void *), void *arg ){
 
     _posixfptr = fptr;
-    return cldthread_smart_create( _posixstub, arg, NULL );
+    return cldthread_create( _posixstub, arg );
 
 }
 

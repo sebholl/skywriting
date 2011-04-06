@@ -20,8 +20,6 @@ void cielID_free( cielID *id );
 
 /* Reading from streams */
 
-int cielID_open_fd( cielID *id );
-
 void cielID_close_fd( cielID *id );
 
 int cielID_publish_stream( cielID *id );

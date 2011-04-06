@@ -31,7 +31,6 @@ static void _ciel_update_env( const cielID *const new_task_id, cielID *input_id[
     FILE *named_pipe;
     char *path, *path2;
     char env_name[2048], env_value[2048];
-    size_t i;
 
     #ifdef DEBUG
     printf( "_ciel_update_env(): setting new task id \"%s\"\n", new_task_id->id_str );
@@ -72,11 +71,7 @@ static void _ciel_update_env( const cielID *const new_task_id, cielID *input_id[
     remove( path );
     free( path );
 
-    if( input_id != NULL ){
-
-        for(i = 0; i < input_count; i++) cielID_open_fd( input_id[i] );
-
-    }
+    if( input_id != NULL ) cielID_read_streams( input_id, input_count );
 
     fclose( fopen( path2, "w" ) );
     free( path2 );

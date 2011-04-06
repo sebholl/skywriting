@@ -53,7 +53,7 @@ static void *_cldptr_table_pull( int key ){
 
     cielID *id = _cldptr_heap_to_cielID( key );
 
-    int fd = dup( cielID_read_stream( id ) );
+    int fd = cielID_read_stream( id );
 
     if( (fd >= 0) && (fstat( fd, &buf ) == 0) ){
 

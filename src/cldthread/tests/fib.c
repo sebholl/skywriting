@@ -59,14 +59,19 @@ cldvalue *Fib(void *_index){
         default:
         {
             cldthread *thread[2];
+
             printf("--> Creating SmartThread Fib(%d)...\n", (index - 1) );
-            thread[0] = cldthread_smart_create( Fib, (void *)(index - 1), _group_id );
+            thread[0] = cldthread_smart_create( _group_id, Fib, (void *)(index - 1) );
+
             printf("--> Creating SmartThread Fib(%d)...\n", (index - 2) );
-            thread[1] = cldthread_smart_create( Fib, (void *)(index - 2), _group_id );
+            thread[1] = cldthread_smart_create( _group_id, Fib, (void *)(index - 2) );
+
             printf("--> Joining threads...\n" );
             cldthread_joins( thread, 2 );
+
             printf("--> Evaluating result...\n" );
-            result = cldvalue_to_integer(cldthread_result_as_cldvalue(thread[0])) + cldvalue_to_integer(cldthread_result_as_cldvalue(thread[1]));
+            result = cldvalue_to_integer( cldthread_result_as_cldvalue(thread[0]) ) +
+                     cldvalue_to_integer( cldthread_result_as_cldvalue(thread[1]) );
             break;
         }
     }
