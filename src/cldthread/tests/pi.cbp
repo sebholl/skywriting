@@ -23,7 +23,7 @@
 		<Compiler>
 			<Add option="-Wall" />
 			<Add option="-std=gnu99" />
-			<Add directory="../libcloudthreads" />
+			<Add directory="../libcloudthreads/src" />
 		</Compiler>
 		<Linker>
 			<Add library="../libcloudthreads/bin/libcloudthreads.a" />
@@ -31,10 +31,10 @@
 			<Add library="ssl" />
 			<Add library="curl" />
 		</Linker>
-		<Unit filename="pi.c">
+		<Unit filename="src/pi.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="pi_halton.c">
+		<Unit filename="src/pi_halton.c">
 			<Option compilerVar="CC" />
 			<Option target="&lt;{~None~}&gt;" />
 		</Unit>

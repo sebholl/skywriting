@@ -23,7 +23,7 @@
 		<Compiler>
 			<Add option="-Wall" />
 			<Add option="-std=gnu99" />
-			<Add directory="../libcloudthreads" />
+			<Add directory="../libcloudthreads/src" />
 		</Compiler>
 		<Linker>
 			<Add library="../libcloudthreads/bin/libcloudthreads.a" />
@@ -32,7 +32,7 @@
 			<Add library="curl" />
 			<Add library="pnglite" />
 		</Linker>
-		<Unit filename="mandelbrot.c">
+		<Unit filename="src/mandelbrot.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Extensions>

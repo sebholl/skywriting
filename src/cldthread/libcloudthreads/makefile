@@ -3,181 +3,24 @@
 #------------------------------------------------------------------------------#
 
 WRKDIR = `pwd`
+MAKE = make
 
-
-CC = gcc
-CPP = g++
-F77 = f77
-F9X = gfortran
-LD = g++
-AR = ar
-RANLIB = ranlib
-WINDRES = windres
-
-INC = -Ilib
-CFLAGS = -Wall -std=gnu99
-RESINC = 
-RCFLAGS = 
-LIBDIR =
-LIB = -lcr -lssl -lcurl
-LDFLAGS =
-
-INC_RELEASE = $(INC)
-CFLAGS_RELEASE = $(CFLAGS)
-RESINC_RELEASE = $(RESINC)
-RCFLAGS_RELEASE = $(RCFLAGS)
-LIBDIR_RELEASE = $(LIBDIR)
-LIB_RELEASE = $(LIB)
-LDFLAGS_RELEASE = $(LDFLAGS)
-OBJDIR_RELEASE = .objs
-DEP_RELEASE = 
-OUT_RELEASE = bin/libcloudthreads.a
-
-INC_DEBUG = $(INC)
-CFLAGS_DEBUG = $(CFLAGS) -g -DDEBUG
-RESINC_DEBUG = $(RESINC)
-RCFLAGS_DEBUG = $(RCFLAGS)
-LIBDIR_DEBUG = $(LIBDIR)
-LIB_DEBUG = $(LIB)
-LDFLAGS_DEBUG = $(LDFLAGS)
-OBJDIR_DEBUG = .objs
-DEP_DEBUG = 
-OUT_DEBUG = bin/libcloudthreads.a
-
-INC_DOXYGEN = $(INC)
-CFLAGS_DOXYGEN = $(CFLAGS)
-RESINC_DOXYGEN = $(RESINC)
-RCFLAGS_DOXYGEN = $(RCFLAGS)
-LIBDIR_DOXYGEN = $(LIBDIR)
-LIB_DOXYGEN = $(LIB)
-LDFLAGS_DOXYGEN = $(LDFLAGS)
-OBJDIR_DOXYGEN = .objs
-DEP_DOXYGEN = 
-
-OBJ_RELEASE = $(OBJDIR_RELEASE)/swref.c.o $(OBJDIR_RELEASE)/sw_interface.c.o $(OBJDIR_RELEASE)/helper/sha.c.o $(OBJDIR_RELEASE)/helper/curl.c.o $(OBJDIR_RELEASE)/cldvalue.c.o $(OBJDIR_RELEASE)/cldthread.c.o $(OBJDIR_RELEASE)/cldptr.c.o $(OBJDIR_RELEASE)/ciel_checkpoint.c.o $(OBJDIR_RELEASE)/cielID.c.o $(OBJDIR_RELEASE)/cJSON/cJSON.c.o $(OBJDIR_RELEASE)/blcr_interface.c.o
-OBJ_DEBUG = $(OBJDIR_DEBUG)/swref.c.o $(OBJDIR_DEBUG)/sw_interface.c.o $(OBJDIR_DEBUG)/helper/sha.c.o $(OBJDIR_DEBUG)/helper/curl.c.o $(OBJDIR_DEBUG)/cldvalue.c.o $(OBJDIR_DEBUG)/cldthread.c.o $(OBJDIR_DEBUG)/cldptr.c.o $(OBJDIR_DEBUG)/ciel_checkpoint.c.o $(OBJDIR_DEBUG)/cielID.c.o $(OBJDIR_DEBUG)/cJSON/cJSON.c.o $(OBJDIR_DEBUG)/blcr_interface.c.o
-
-all: release doxygen
-
-clean: clean_release clean_debug
-	rm -f -r doc
-	rm -f -r bin
-
-release: $(OUT_RELEASE)
-
-$(OUT_RELEASE): $(OBJ_RELEASE) $(DEP_RELEASE)
-	test -d bin || mkdir -p bin
-	$(AR) rcs $(OUT_RELEASE) $(OBJ_RELEASE)
-	$(AR) rcs $(OUT_RELEASE) $(OBJ_RELEASE)
-
-$(OBJDIR_RELEASE)/swref.c.o: swref.c
-	test -d $(OBJDIR_RELEASE) || mkdir -p $(OBJDIR_RELEASE)
-	$(CC) $(CFLAGS_RELEASE) $(INC_RELEASE) -c -o $(OBJDIR_RELEASE)/swref.c.o swref.c
-
-$(OBJDIR_RELEASE)/sw_interface.c.o: sw_interface.c
-	test -d $(OBJDIR_RELEASE) || mkdir -p $(OBJDIR_RELEASE)
-	$(CC) $(CFLAGS_RELEASE) $(INC_RELEASE) -c -o $(OBJDIR_RELEASE)/sw_interface.c.o sw_interface.c
-
-$(OBJDIR_RELEASE)/helper/sha.c.o: helper/sha.c
-	test -d $(OBJDIR_RELEASE)/helper || mkdir -p $(OBJDIR_RELEASE)/helper
-	$(CC) $(CFLAGS_RELEASE) $(INC_RELEASE) -c -o $(OBJDIR_RELEASE)/helper/sha.c.o helper/sha.c
-
-$(OBJDIR_RELEASE)/helper/curl.c.o: helper/curl.c
-	test -d $(OBJDIR_RELEASE)/helper || mkdir -p $(OBJDIR_RELEASE)/helper
-	$(CC) $(CFLAGS_RELEASE) $(INC_RELEASE) -c -o $(OBJDIR_RELEASE)/helper/curl.c.o helper/curl.c
-
-$(OBJDIR_RELEASE)/cldvalue.c.o: cldvalue.c
-	test -d $(OBJDIR_RELEASE) || mkdir -p $(OBJDIR_RELEASE)
-	$(CC) $(CFLAGS_RELEASE) $(INC_RELEASE) -c -o $(OBJDIR_RELEASE)/cldvalue.c.o cldvalue.c
-
-$(OBJDIR_RELEASE)/cldthread.c.o: cldthread.c
-	test -d $(OBJDIR_RELEASE) || mkdir -p $(OBJDIR_RELEASE)
-	$(CC) $(CFLAGS_RELEASE) $(INC_RELEASE) -c -o $(OBJDIR_RELEASE)/cldthread.c.o cldthread.c
-
-$(OBJDIR_RELEASE)/cldptr.c.o: cldptr.c
-	test -d $(OBJDIR_RELEASE) || mkdir -p $(OBJDIR_RELEASE)
-	$(CC) $(CFLAGS_RELEASE) $(INC_RELEASE) -c -o $(OBJDIR_RELEASE)/cldptr.c.o cldptr.c
-
-$(OBJDIR_RELEASE)/ciel_checkpoint.c.o: ciel_checkpoint.c
-	test -d $(OBJDIR_RELEASE) || mkdir -p $(OBJDIR_RELEASE)
-	$(CC) $(CFLAGS_RELEASE) $(INC_RELEASE) -c -o $(OBJDIR_RELEASE)/ciel_checkpoint.c.o ciel_checkpoint.c
-
-$(OBJDIR_RELEASE)/cielID.c.o: cielID.c
-	test -d $(OBJDIR_RELEASE) || mkdir -p $(OBJDIR_RELEASE)
-	$(CC) $(CFLAGS_RELEASE) $(INC_RELEASE) -c -o $(OBJDIR_RELEASE)/cielID.c.o cielID.c
-
-$(OBJDIR_RELEASE)/cJSON/cJSON.c.o: cJSON/cJSON.c
-	test -d $(OBJDIR_RELEASE)/cJSON || mkdir -p $(OBJDIR_RELEASE)/cJSON
-	$(CC) $(CFLAGS_RELEASE) $(INC_RELEASE) -c -o $(OBJDIR_RELEASE)/cJSON/cJSON.c.o cJSON/cJSON.c
-
-$(OBJDIR_RELEASE)/blcr_interface.c.o: blcr_interface.c
-	test -d $(OBJDIR_RELEASE) || mkdir -p $(OBJDIR_RELEASE)
-	$(CC) $(CFLAGS_RELEASE) $(INC_RELEASE) -c -o $(OBJDIR_RELEASE)/blcr_interface.c.o blcr_interface.c
-
-
-clean_release:
-	rm -f $(OBJ_RELEASE) $(OUT_RELEASE)
-
-debug: $(OUT_DEBUG)
-
-$(OUT_DEBUG): $(OBJ_DEBUG) $(DEP_DEBUG)
-	test -d bin || mkdir -p bin
-	$(AR) rcs $(OUT_DEBUG) $(OBJ_DEBUG)
-	$(AR) rcs $(OUT_DEBUG) $(OBJ_DEBUG)
-
-$(OBJDIR_DEBUG)/swref.c.o: swref.c
-	test -d $(OBJDIR_DEBUG) || mkdir -p $(OBJDIR_DEBUG)
-	$(CC) $(CFLAGS_DEBUG) $(INC_DEBUG) -c -o $(OBJDIR_DEBUG)/swref.c.o swref.c
-
-$(OBJDIR_DEBUG)/sw_interface.c.o: sw_interface.c
-	test -d $(OBJDIR_DEBUG) || mkdir -p $(OBJDIR_DEBUG)
-	$(CC) $(CFLAGS_DEBUG) $(INC_DEBUG) -c -o $(OBJDIR_DEBUG)/sw_interface.c.o sw_interface.c
-
-$(OBJDIR_DEBUG)/helper/sha.c.o: helper/sha.c
-	test -d $(OBJDIR_DEBUG)/helper || mkdir -p $(OBJDIR_DEBUG)/helper
-	$(CC) $(CFLAGS_DEBUG) $(INC_DEBUG) -c -o $(OBJDIR_DEBUG)/helper/sha.c.o helper/sha.c
-
-$(OBJDIR_DEBUG)/helper/curl.c.o: helper/curl.c
-	test -d $(OBJDIR_DEBUG)/helper || mkdir -p $(OBJDIR_DEBUG)/helper
-	$(CC) $(CFLAGS_DEBUG) $(INC_DEBUG) -c -o $(OBJDIR_DEBUG)/helper/curl.c.o helper/curl.c
-
-$(OBJDIR_DEBUG)/cldvalue.c.o: cldvalue.c
-	test -d $(OBJDIR_DEBUG) || mkdir -p $(OBJDIR_DEBUG)
-	$(CC) $(CFLAGS_DEBUG) $(INC_DEBUG) -c -o $(OBJDIR_DEBUG)/cldvalue.c.o cldvalue.c
-
-$(OBJDIR_DEBUG)/cldthread.c.o: cldthread.c
-	test -d $(OBJDIR_DEBUG) || mkdir -p $(OBJDIR_DEBUG)
-	$(CC) $(CFLAGS_DEBUG) $(INC_DEBUG) -c -o $(OBJDIR_DEBUG)/cldthread.c.o cldthread.c
-
-$(OBJDIR_DEBUG)/cldptr.c.o: cldptr.c
-	test -d $(OBJDIR_DEBUG) || mkdir -p $(OBJDIR_DEBUG)
-	$(CC) $(CFLAGS_DEBUG) $(INC_DEBUG) -c -o $(OBJDIR_DEBUG)/cldptr.c.o cldptr.c
-
-$(OBJDIR_DEBUG)/ciel_checkpoint.c.o: ciel_checkpoint.c
-	test -d $(OBJDIR_DEBUG) || mkdir -p $(OBJDIR_DEBUG)
-	$(CC) $(CFLAGS_DEBUG) $(INC_DEBUG) -c -o $(OBJDIR_DEBUG)/ciel_checkpoint.c.o ciel_checkpoint.c
-
-$(OBJDIR_DEBUG)/cielID.c.o: cielID.c
-	test -d $(OBJDIR_DEBUG) || mkdir -p $(OBJDIR_DEBUG)
-	$(CC) $(CFLAGS_DEBUG) $(INC_DEBUG) -c -o $(OBJDIR_DEBUG)/cielID.c.o cielID.c
-
-$(OBJDIR_DEBUG)/cJSON/cJSON.c.o: cJSON/cJSON.c
-	test -d $(OBJDIR_DEBUG)/cJSON || mkdir -p $(OBJDIR_DEBUG)/cJSON
-	$(CC) $(CFLAGS_DEBUG) $(INC_DEBUG) -c -o $(OBJDIR_DEBUG)/cJSON/cJSON.c.o cJSON/cJSON.c
-
-$(OBJDIR_DEBUG)/blcr_interface.c.o: blcr_interface.c
-	test -d $(OBJDIR_DEBUG) || mkdir -p $(OBJDIR_DEBUG)
-	$(CC) $(CFLAGS_DEBUG) $(INC_DEBUG) -c -o $(OBJDIR_DEBUG)/blcr_interface.c.o blcr_interface.c
-
-
-clean_debug:
-	rm -f $(OBJ_DEBUG) $(OUT_DEBUG)
-
-doxygen: before_doxygen
-
-before_doxygen:
-	doxygen Doxyfile
+all: 
+	$(MAKE) virtual_all -f libcloudthreads.cbp.mak
 	$(MAKE) -C doc/latex all
+	
+release:
+	$(MAKE) release -f libcloudthreads.cbp.mak
+	
+debug:
+	$(MAKE) debug -f libcloudthreads.cbp.mak
 
-.PHONY: clean clean_release clean_debug before_doxygen doxygen
+clean:
+	$(MAKE) clean -f libcloudthreads.cbp.mak
+	rmdir 'bin'
+	rm -f -r 'doc'
+	rm *.layout *.depend
+	
+
+.PHONY: all release debug clean
 

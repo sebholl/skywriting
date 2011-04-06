@@ -23,7 +23,7 @@
 		<Compiler>
 			<Add option="-Wall" />
 			<Add option="-std=gnu99" />
-			<Add directory="../libcloudthreads" />
+			<Add directory="../libcloudthreads/src" />
 		</Compiler>
 		<Linker>
 			<Add library="../libcloudthreads/bin/libcloudthreads.a" />
@@ -31,7 +31,7 @@
 			<Add library="ssl" />
 			<Add library="curl" />
 		</Linker>
-		<Unit filename="prodcons.c">
+		<Unit filename="src/prodcons.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Extensions>

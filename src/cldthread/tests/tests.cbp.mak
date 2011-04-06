@@ -14,12 +14,12 @@ AR = ar
 RANLIB = ranlib
 WINDRES = windres
 
-INC = -I../libcloudthreads/src
-CFLAGS = -Wall -std=gnu99
+INC =
+CFLAGS = -Wall
 RESINC = 
 RCFLAGS = 
 LIBDIR =
-LIB = ../libcloudthreads/bin/libcloudthreads.a -lcr -lssl -lcurl -lpnglite
+LIB =
 LDFLAGS =
 
 INC_DEBUG = $(INC)
@@ -29,23 +29,23 @@ RCFLAGS_DEBUG = $(RCFLAGS)
 LIBDIR_DEBUG = $(LIBDIR)
 LIB_DEBUG = $(LIB)
 LDFLAGS_DEBUG = $(LDFLAGS)
-OBJDIR_DEBUG = .objs
+OBJDIR_DEBUG = obj/Debug
 DEP_DEBUG = 
-OUT_DEBUG = ./bin/mandelbrot
+OUT_DEBUG = bin/Debug/tests
 
 INC_RELEASE = $(INC)
-CFLAGS_RELEASE = $(CFLAGS)
+CFLAGS_RELEASE = $(CFLAGS) -O2
 RESINC_RELEASE = $(RESINC)
 RCFLAGS_RELEASE = $(RCFLAGS)
 LIBDIR_RELEASE = $(LIBDIR)
 LIB_RELEASE = $(LIB)
-LDFLAGS_RELEASE = $(LDFLAGS)
-OBJDIR_RELEASE = .objs
+LDFLAGS_RELEASE = $(LDFLAGS) -s
+OBJDIR_RELEASE = obj/Release
 DEP_RELEASE = 
-OUT_RELEASE = ./bin/mandelbrot
+OUT_RELEASE = bin/Release/tests
 
-OBJ_DEBUG = $(OBJDIR_DEBUG)/src/mandelbrot.o
-OBJ_RELEASE = $(OBJDIR_RELEASE)/src/mandelbrot.o
+OBJ_DEBUG =
+OBJ_RELEASE =
 
 all: debug release
 
@@ -54,12 +54,8 @@ clean: clean_debug clean_release
 debug: $(OUT_DEBUG)
 
 $(OUT_DEBUG): $(OBJ_DEBUG) $(DEP_DEBUG)
-	test -d ./bin || mkdir -p ./bin
-	$(LD) $(LDFLAGS_DEBUG) $(LIBDIR_DEBUG) -o $(OUT_DEBUG) $(OBJ_DEBUG) $(LIB_DEBUG)
-
-$(OBJDIR_DEBUG)/src/mandelbrot.o: src/mandelbrot.c
-	test -d $(OBJDIR_DEBUG)/src || mkdir -p $(OBJDIR_DEBUG)/src
-	$(CC) $(CFLAGS_DEBUG) $(INC_DEBUG) -c -o $(OBJDIR_DEBUG)/src/mandelbrot.o src/mandelbrot.c
+	test -d bin/Debug || mkdir -p bin/Debug
+	test -d bin/Debug || mkdir -p bin/Debug
 
 
 clean_debug:
@@ -68,12 +64,8 @@ clean_debug:
 release: $(OUT_RELEASE)
 
 $(OUT_RELEASE): $(OBJ_RELEASE) $(DEP_RELEASE)
-	test -d ./bin || mkdir -p ./bin
-	$(LD) $(LDFLAGS_RELEASE) $(LIBDIR_RELEASE) -o $(OUT_RELEASE) $(OBJ_RELEASE) $(LIB_RELEASE)
-
-$(OBJDIR_RELEASE)/src/mandelbrot.o: src/mandelbrot.c
-	test -d $(OBJDIR_RELEASE)/src || mkdir -p $(OBJDIR_RELEASE)/src
-	$(CC) $(CFLAGS_RELEASE) $(INC_RELEASE) -c -o $(OBJDIR_RELEASE)/src/mandelbrot.o src/mandelbrot.c
+	test -d bin/Release || mkdir -p bin/Release
+	test -d bin/Release || mkdir -p bin/Release
 
 
 clean_release:

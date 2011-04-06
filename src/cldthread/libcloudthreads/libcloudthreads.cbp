@@ -4,7 +4,7 @@
 	<Project>
 		<Option title="libCloudThreads" />
 		<Option pch_mode="2" />
-		<Option default_target="helloworld" />
+		<Option default_target="Release" />
 		<Option compiler="gcc" />
 		<Option extended_obj_names="1" />
 		<Build>
@@ -34,141 +34,143 @@
 				</ExtraCommands>
 			</Target>
 		</Build>
+		<VirtualTargets>
+			<Add alias="All" targets="Release;Doxygen;" />
+		</VirtualTargets>
 		<Compiler>
 			<Add option="-Wall" />
 			<Add option="-std=gnu99" />
-			<Add directory="lib" />
 		</Compiler>
 		<Linker>
 			<Add library="cr" />
 			<Add library="ssl" />
 			<Add library="curl" />
 		</Linker>
-		<Unit filename="_cldptr_table.c">
-			<Option compilerVar="CC" />
-			<Option compile="0" />
-			<Option link="0" />
-			<Option target="Release" />
-			<Option target="Debug" />
-		</Unit>
-		<Unit filename="_cldthread.c">
-			<Option compilerVar="CC" />
-			<Option compile="0" />
-			<Option link="0" />
-			<Option target="Release" />
-			<Option target="Debug" />
-		</Unit>
-		<Unit filename="_sw_interface.c">
-			<Option compilerVar="CC" />
-			<Option compile="0" />
-			<Option link="0" />
-			<Option target="Release" />
-			<Option target="Debug" />
-		</Unit>
-		<Unit filename="blcr_interface.c">
+		<Unit filename="lib/cJSON/cJSON.c">
 			<Option compilerVar="CC" />
 			<Option target="Release" />
 			<Option target="Debug" />
 		</Unit>
-		<Unit filename="blcr_interface.h">
+		<Unit filename="lib/cJSON/cJSON.h">
 			<Option target="Release" />
 			<Option target="Debug" />
 		</Unit>
-		<Unit filename="cJSON/cJSON.c">
-			<Option compilerVar="CC" />
+		<Unit filename="lib/klib/khash.h">
 			<Option target="Release" />
 			<Option target="Debug" />
 		</Unit>
-		<Unit filename="cJSON/cJSON.h">
-			<Option target="Release" />
-			<Option target="Debug" />
-		</Unit>
-		<Unit filename="cielID.c">
-			<Option compilerVar="CC" />
-			<Option target="Release" />
-			<Option target="Debug" />
-		</Unit>
-		<Unit filename="cielID.h">
-			<Option target="Release" />
-			<Option target="Debug" />
-		</Unit>
-		<Unit filename="ciel_checkpoint.c">
-			<Option compilerVar="CC" />
-			<Option target="Release" />
-			<Option target="Debug" />
-		</Unit>
-		<Unit filename="ciel_checkpoint.h">
-			<Option target="Release" />
-			<Option target="Debug" />
-		</Unit>
-		<Unit filename="cldptr.c">
-			<Option compilerVar="CC" />
-			<Option target="Release" />
-			<Option target="Debug" />
-		</Unit>
-		<Unit filename="cldptr.h">
-			<Option target="Release" />
-			<Option target="Debug" />
-		</Unit>
-		<Unit filename="cldthread.c">
-			<Option compilerVar="CC" />
-			<Option target="Release" />
-			<Option target="Debug" />
-		</Unit>
-		<Unit filename="cldthread.h">
-			<Option target="Release" />
-			<Option target="Debug" />
-		</Unit>
-		<Unit filename="cldvalue.c">
-			<Option compilerVar="CC" />
-			<Option target="Release" />
-			<Option target="Debug" />
-		</Unit>
-		<Unit filename="cldvalue.h">
-			<Option target="Release" />
-			<Option target="Debug" />
-		</Unit>
-		<Unit filename="helper/curl.c">
-			<Option compilerVar="CC" />
-			<Option target="Release" />
-			<Option target="Debug" />
-		</Unit>
-		<Unit filename="helper/curl.h">
-			<Option target="Release" />
-			<Option target="Debug" />
-		</Unit>
-		<Unit filename="helper/sha.c">
-			<Option compilerVar="CC" />
-			<Option target="Release" />
-			<Option target="Debug" />
-		</Unit>
-		<Unit filename="helper/sha.h">
-			<Option target="Release" />
-			<Option target="Debug" />
-		</Unit>
-		<Unit filename="klib/khash.h">
-			<Option target="Release" />
-			<Option target="Debug" />
-		</Unit>
-		<Unit filename="klib/khash_test.c">
+		<Unit filename="lib/klib/khash_test.c">
 			<Option compilerVar="CC" />
 			<Option target="&lt;{~None~}&gt;" />
 		</Unit>
-		<Unit filename="sw_interface.c">
+		<Unit filename="src/_cldptr_table.c">
+			<Option compilerVar="CC" />
+			<Option compile="0" />
+			<Option link="0" />
+			<Option target="Release" />
+			<Option target="Debug" />
+		</Unit>
+		<Unit filename="src/_cldthread.c">
+			<Option compilerVar="CC" />
+			<Option compile="0" />
+			<Option link="0" />
+			<Option target="Release" />
+			<Option target="Debug" />
+		</Unit>
+		<Unit filename="src/_sw_interface.c">
+			<Option compilerVar="CC" />
+			<Option compile="0" />
+			<Option link="0" />
+			<Option target="Release" />
+			<Option target="Debug" />
+		</Unit>
+		<Unit filename="src/blcr_interface.c">
 			<Option compilerVar="CC" />
 			<Option target="Release" />
 			<Option target="Debug" />
 		</Unit>
-		<Unit filename="sw_interface.h">
+		<Unit filename="src/blcr_interface.h">
 			<Option target="Release" />
 			<Option target="Debug" />
 		</Unit>
-		<Unit filename="swref.c">
+		<Unit filename="src/cielID.c">
 			<Option compilerVar="CC" />
 			<Option target="Release" />
 			<Option target="Debug" />
 		</Unit>
-		<Unit filename="swref.h">
+		<Unit filename="src/cielID.h">
+			<Option target="Release" />
+			<Option target="Debug" />
+		</Unit>
+		<Unit filename="src/ciel_checkpoint.c">
+			<Option compilerVar="CC" />
+			<Option target="Release" />
+			<Option target="Debug" />
+		</Unit>
+		<Unit filename="src/ciel_checkpoint.h">
+			<Option target="Release" />
+			<Option target="Debug" />
+		</Unit>
+		<Unit filename="src/cldptr.c">
+			<Option compilerVar="CC" />
+			<Option target="Release" />
+			<Option target="Debug" />
+		</Unit>
+		<Unit filename="src/cldptr.h">
+			<Option target="Release" />
+			<Option target="Debug" />
+		</Unit>
+		<Unit filename="src/cldthread.c">
+			<Option compilerVar="CC" />
+			<Option target="Release" />
+			<Option target="Debug" />
+		</Unit>
+		<Unit filename="src/cldthread.h">
+			<Option target="Release" />
+			<Option target="Debug" />
+		</Unit>
+		<Unit filename="src/cldvalue.c">
+			<Option compilerVar="CC" />
+			<Option target="Release" />
+			<Option target="Debug" />
+		</Unit>
+		<Unit filename="src/cldvalue.h">
+			<Option target="Release" />
+			<Option target="Debug" />
+		</Unit>
+		<Unit filename="src/helper/curl.c">
+			<Option compilerVar="CC" />
+			<Option target="Release" />
+			<Option target="Debug" />
+		</Unit>
+		<Unit filename="src/helper/curl.h">
+			<Option target="Release" />
+			<Option target="Debug" />
+		</Unit>
+		<Unit filename="src/helper/sha.c">
+			<Option compilerVar="CC" />
+			<Option target="Release" />
+			<Option target="Debug" />
+		</Unit>
+		<Unit filename="src/helper/sha.h">
+			<Option target="Release" />
+			<Option target="Debug" />
+		</Unit>
+		<Unit filename="src/sw_interface.c">
+			<Option compilerVar="CC" />
+			<Option target="Release" />
+			<Option target="Debug" />
+		</Unit>
+		<Unit filename="src/sw_interface.h">
+			<Option target="Release" />
+			<Option target="Debug" />
+		</Unit>
+		<Unit filename="src/swref.c">
+			<Option compilerVar="CC" />
+			<Option target="Release" />
+			<Option target="Debug" />
+		</Unit>
+		<Unit filename="src/swref.h">
 			<Option target="Release" />
 			<Option target="Debug" />
 		</Unit>

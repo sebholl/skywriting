@@ -30,6 +30,7 @@ clean:
 	$(MAKE) clean -f prodcons.cbp.mak
 	$(MAKE) clean -f mandelbrot.cbp.mak
 	rm -f -r ./bin 
+	rm -f *.layout *.depend
 	
 
 .PHONY: all release debug clean

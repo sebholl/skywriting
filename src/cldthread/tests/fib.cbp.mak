@@ -14,7 +14,7 @@ AR = ar
 RANLIB = ranlib
 WINDRES = windres
 
-INC = -I../libcloudthreads
+INC = -I../libcloudthreads/src
 CFLAGS = -Wall -std=gnu99
 RESINC = 
 RCFLAGS = 
@@ -44,8 +44,8 @@ OBJDIR_RELEASE = .objs
 DEP_RELEASE = 
 OUT_RELEASE = ./bin/fib
 
-OBJ_DEBUG = $(OBJDIR_DEBUG)/fib.o
-OBJ_RELEASE = $(OBJDIR_RELEASE)/fib.o
+OBJ_DEBUG = $(OBJDIR_DEBUG)/src/fib.o
+OBJ_RELEASE = $(OBJDIR_RELEASE)/src/fib.o
 
 all: debug release
 
@@ -57,9 +57,9 @@ $(OUT_DEBUG): $(OBJ_DEBUG) $(DEP_DEBUG)
 	test -d ./bin || mkdir -p ./bin
 	$(LD) $(LDFLAGS_DEBUG) $(LIBDIR_DEBUG) -o $(OUT_DEBUG) $(OBJ_DEBUG) $(LIB_DEBUG)
 
-$(OBJDIR_DEBUG)/fib.o: fib.c
-	test -d $(OBJDIR_DEBUG) || mkdir -p $(OBJDIR_DEBUG)
-	$(CC) $(CFLAGS_DEBUG) $(INC_DEBUG) -c -o $(OBJDIR_DEBUG)/fib.o fib.c
+$(OBJDIR_DEBUG)/src/fib.o: src/fib.c
+	test -d $(OBJDIR_DEBUG)/src || mkdir -p $(OBJDIR_DEBUG)/src
+	$(CC) $(CFLAGS_DEBUG) $(INC_DEBUG) -c -o $(OBJDIR_DEBUG)/src/fib.o src/fib.c
 
 
 clean_debug:
@@ -71,9 +71,9 @@ $(OUT_RELEASE): $(OBJ_RELEASE) $(DEP_RELEASE)
 	test -d ./bin || mkdir -p ./bin
 	$(LD) $(LDFLAGS_RELEASE) $(LIBDIR_RELEASE) -o $(OUT_RELEASE) $(OBJ_RELEASE) $(LIB_RELEASE)
 
-$(OBJDIR_RELEASE)/fib.o: fib.c
-	test -d $(OBJDIR_RELEASE) || mkdir -p $(OBJDIR_RELEASE)
-	$(CC) $(CFLAGS_RELEASE) $(INC_RELEASE) -c -o $(OBJDIR_RELEASE)/fib.o fib.c
+$(OBJDIR_RELEASE)/src/fib.o: src/fib.c
+	test -d $(OBJDIR_RELEASE)/src || mkdir -p $(OBJDIR_RELEASE)/src
+	$(CC) $(CFLAGS_RELEASE) $(INC_RELEASE) -c -o $(OBJDIR_RELEASE)/src/fib.o src/fib.c
 
 
 clean_release:
