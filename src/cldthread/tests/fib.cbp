@@ -21,6 +21,7 @@
 			</Target>
 		</Build>
 		<Compiler>
+			<Add option="-O3" />
 			<Add option="-Wall" />
 			<Add option="-std=gnu99" />
 			<Add directory="../libcloudthreads/src" />

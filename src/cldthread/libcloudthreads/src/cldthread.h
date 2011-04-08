@@ -56,6 +56,7 @@ typedef cielID cldthread;
  */
 int cldthread_init( void );
 
+
 /* Managing cloud threads */
 
 /*!
@@ -64,11 +65,12 @@ int cldthread_init( void );
  *  @param[in] fptr       Function that becomes the entry point of the new thread.
  *                        The return value of this function becomes the value of the
  *                        thread output (unless the output has been opened as a stream).
- *  @param[in] arg0       Argument that fptr is executed with.
+ *  @param[in] arg        Argument that fptr is executed with.
  *
  *  @returns A value that represents the new cloud thread.
  */
-#define cldthread_create( fptr, arg0 ) cldthread_smart_create( NULL, fptr, arg0 )
+#define cldthread_create( fptr, arg ) cldthread_smart_create( NULL, fptr, arg )
+
 
 /*!
  *  Create a thread for execution.
@@ -76,11 +78,12 @@ int cldthread_init( void );
  *  @param[in] fptr       Function that becomes the entry point of the new thread.
  *                        The return value of this function becomes the value of the
  *                        thread output (unless the output has been opened as a stream).
- *  @param[in] arg0       Argument that fptr is executed with.
+ *  @param[in] arg        Argument that fptr is executed with.
  *
  *  @returns A value that represent the new cloud thread.
  */
-cldthread *cldthread_posix_create( void *(*fptr)(void *), void *arg0 );
+cldthread *cldthread_posix_create( void *(*fptr)(void *), void *arg );
+
 
 /*!
  *  Start and schedule a thread for execution under memoisation. The parameters supplied
@@ -103,7 +106,8 @@ cldthread *cldthread_smart_create( char *group_id, cldvalue *(*fptr)(void *), vo
  *  Retrieves a value that is used to represent the current cloud thread.
  *  @return A value that can be used to represent the current cloud thread.
  */
-const cldthread *cldthread_current_thread( void );
+#define cldthread_current_thread() ((cldthread *)_ciel_get_task_id())
+
 
 /*!
  *  Wait on the result of a thread.
@@ -113,6 +117,7 @@ const cldthread *cldthread_current_thread( void );
  *  @returns A non-zero value if a result was successfully retrieved.
  */
 #define cldthread_join( thread ) cldthread_joins( &(thread), 1 )
+
 
 /*!
  *  Wait on the result of multiple threads.
@@ -125,23 +130,24 @@ const cldthread *cldthread_current_thread( void );
 
 
 /*!
- *  Stream output from the current thread.  This will close automatically once
- *  returned from the entry point of the thread or can be closed earlier using
- *  cldthread_close_result_stream().  Any thread attempting to join this thread
+ *  Stream output from the current thread.  The returned file descriptor will close
+ *  automatically once returned from the entry point of the thread or can be closed
+ *  earlier using cldthread_close_result_stream().  Any thread attempting to join this thread
  *  will resume as soon as possible and can read from the stream using
- *  cldthread_result_as_stream() .
+ *  cldthread_result_as_fd() .
  *
  *  @returns A file descriptor that we can stream thread output to.
  */
-int cldthread_open_result_as_stream( void );
+int cldthread_stream_result( void );
 
 
 /*!
- *  Finalise a thread's output stream.
+ *  Finalise a thread's output stream and close the concerned file descriptor.
  *
- *  @returns A file descriptor that we can stream thread output to.
+ *  @returns A non-zero value if the output was published (for the first time).
  */
-int cldthread_close_result_stream( void );
+#define cldthread_close_streaming_result( thread ) cielID_publish_stream( thread )
+
 
 /*!
  *  Retrieve the result of a thread as a cloud value.
@@ -189,6 +195,7 @@ cldvalue *cldthread_result_as_cldvalue( cldthread *thread );
  */
 swref *cldthread_result_as_ref( cldthread *thread );
 
+
 /*!
  *  Publish the global result for an application that is run in a cloud
  *  environment.  The function returns EXIT_SUCCESS for convenience.
@@ -210,6 +217,7 @@ swref *cldthread_result_as_ref( cldthread *thread );
  *  @returns EXIT_SUCCESS
  */
 int cldapp_exit( cldvalue *exit_value );
+
 
 /*!
  *  Free any memory associated with a thread pointer.  Note that this is a

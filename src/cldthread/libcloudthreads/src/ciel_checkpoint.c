@@ -9,7 +9,14 @@
 #include "sw_interface.h"
 #include "blcr_interface.h"
 
-void _ciel_set_task_id( const cielID *const new_id ){
+#include "ciel_checkpoint.h"
+
+static cielID *_currentID = NULL;
+
+void _ciel_set_task_id( cielID *const new_id ){
+
+    cielID_free( _currentID );
+    _currentID = new_id;
 
     sw_set_current_task_id( new_id->id_str );
 
@@ -21,12 +28,16 @@ void _ciel_set_task_id( const cielID *const new_id ){
 
 }
 
+cielID * _ciel_get_task_id( void ){
+    return _currentID;
+}
+
 static inline void _strip_new_line( char *const string ){
     char *tmp;
     if ((tmp = strchr(string, '\n'))!=NULL) *tmp = 0;
 }
 
-static void _ciel_update_env( const cielID *const new_task_id, cielID *input_id[], size_t const input_count ){
+static void _ciel_update_env( cielID *const new_task_id, cielID *input_id[], size_t const input_count ){
 
     FILE *named_pipe;
     char *path, *path2;
@@ -38,43 +49,52 @@ static void _ciel_update_env( const cielID *const new_task_id, cielID *input_id[
 
     _ciel_set_task_id( new_task_id );
 
-    asprintf( &path, "/tmp/%s", sw_get_current_task_id() );
-    asprintf( &path2, "/tmp/%s:sync", sw_get_current_task_id() );
+    ASPRINTF_ORNULL( &path, "/tmp/%s", sw_get_current_task_id() );
+    ASPRINTF_ORNULL( &path2, "/tmp/%s:sync", sw_get_current_task_id() );
 
-    #ifdef DEBUG
-    printf( "_ciel_update_env(): opening named FIFO \"%s\"\n", path );
-    #endif
+    if( (path != NULL) && (path2 != NULL) ){
 
-    named_pipe = fopen( path, "r" );
+        #ifdef DEBUG
+        printf( "_ciel_update_env(): opening named FIFO \"%s\"\n", path );
+        #endif
 
-    if(named_pipe == NULL) exit(-1000);
+        named_pipe = fopen( path, "r" );
 
-    while(!feof(named_pipe)){
+        if(named_pipe == NULL) exit(-1000);
 
-        if( ( fgets( env_name, 2048, named_pipe ) != NULL) &&
-            ( fgets( env_value, 2048, named_pipe ) != NULL)   ) {
+        while(!feof(named_pipe)){
 
-            _strip_new_line( env_name );
-            _strip_new_line( env_value );
+            if( ( fgets( env_name, 2048, named_pipe ) != NULL) &&
+                ( fgets( env_value, 2048, named_pipe ) != NULL)   ) {
 
-            #ifdef DEBUG
-            printf( "_ciel_update_env(): setting %s to \"%s\"\n", env_name, env_value );
-            #endif
+                _strip_new_line( env_name );
+                _strip_new_line( env_value );
 
-            setenv( env_name, env_value, 1 );
+                #ifdef DEBUG
+                printf( "_ciel_update_env(): setting %s to \"%s\"\n", env_name, env_value );
+                #endif
+
+                setenv( env_name, env_value, 1 );
+
+            }
 
         }
 
+        fclose( named_pipe );
+        remove( path );
+        free( path );
+
+        if( input_id != NULL ) cielID_read_streams( input_id, input_count );
+
+        fclose( fopen( path2, "w" ) );
+        free( path2 );
+
+    } else {
+
+        fprintf( stderr, "_ciel_update_env(): failed to open pipes (no memory for path strings)\n" );
+        exit( EXIT_FAILURE );
+
     }
-
-    fclose( named_pipe );
-    remove( path );
-    free( path );
-
-    if( input_id != NULL ) cielID_read_streams( input_id, input_count );
-
-    fclose( fopen( path2, "w" ) );
-    free( path2 );
 
 }
 
@@ -87,7 +107,7 @@ int _ciel_spawn_chkpt_task( cielID *new_task_id, cielID *output_task_id,
 
     char *path;
 
-    asprintf( &path, "/tmp/checkpoint.%s", new_task_id->id_str );
+    ASPRINTF_ORDIE( _ciel_spawn_chkpt_task(), &path, "/tmp/checkpoint.%s", new_task_id->id_str );
 
     result = blcr_checkpoint( path );
 
@@ -123,7 +143,7 @@ int _ciel_spawn_chkpt_task( cielID *new_task_id, cielID *output_task_id,
         size_t i;
 
         for(i = 0; i < input_count; i++ ){
-            asprintf( &tmp, "input%d", i );
+            ASPRINTF_ORDIE( _ciel_spawn_chkpt_task(), &tmp, "input%d", i );
             ref = swref_create( FUTURE, input_id[i]->id_str, NULL, 0, NULL );
             cJSON_AddItemToObject( jsonenc_dpnds, tmp, swref_serialize( ref) );
             swref_free( ref );
@@ -147,6 +167,8 @@ int _ciel_spawn_chkpt_task( cielID *new_task_id, cielID *output_task_id,
 
         /* If we managed to spawn a new continuation task, then terminate this process */
         if( is_continuation ) exit( 20 );
+
+        cielID_free( new_task_id );
 
 
     } else if (result < 0) { /* resumed checkpoint */

@@ -28,9 +28,7 @@ static cielID *_cldptr_heap_to_cielID( int const heapkey ){
 
     char *str;
 
-    asprintf( &str, "heap:%d", heapkey );
-
-    return cielID_create2( str );
+    return (asprintf( &str, "heap:%d", heapkey ) != -1) ? cielID_create2( str ) : NULL;
 
 }
 

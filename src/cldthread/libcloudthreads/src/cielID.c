@@ -162,28 +162,29 @@ int cielID_publish_stream( cielID *id ){
 
         char *streamfilename, *streamfilepath;
 
-        asprintf( &streamfilename, ".%s", id->id_str );
+        if( asprintf( &streamfilename, ".%s", id->id_str ) != -1 ){
 
-        streamfilepath = sw_generate_block_store_path( streamfilename );
+            streamfilepath = sw_generate_block_store_path( streamfilename );
 
-        free( streamfilename );
+            free( streamfilename );
 
-        id->fd = open( streamfilepath, O_CREAT|O_WRONLY|O_TRUNC, S_IRUSR|S_IWUSR );
+            id->fd = open( streamfilepath, O_CREAT|O_WRONLY|O_TRUNC, S_IRUSR|S_IWUSR );
 
-        free( streamfilepath );
+            free( streamfilepath );
 
-        if(id->fd >= 0){
+            if(id->fd >= 0){
 
-            swref* ref = swref_create( STREAMING, id->id_str, NULL, 0, sw_get_current_worker_loc() );
+                swref* ref = swref_create( STREAMING, id->id_str, NULL, 0, sw_get_current_worker_loc() );
 
-            if( !sw_publish_ref( sw_get_master_loc(), sw_get_current_task_id(), ref ) ){
+                if( !sw_publish_ref( sw_get_master_loc(), sw_get_current_task_id(), ref ) ){
 
-                close( id->fd );
-                id->fd = -1;
+                    cielID_close_fd( id );
+
+                }
+
+                free( ref );
 
             }
-
-            free( ref );
 
         }
 
@@ -200,31 +201,41 @@ int cielID_finalize_stream( cielID *id ){
 
     if( id->fd >= 0 ){
 
-        char *streamfilename, *streamfilepath, *concretefilepath;
+        char *streamfilename;
 
-        asprintf( &streamfilename, ".%s", id->id_str );
+        if( asprintf( &streamfilename, ".%s", id->id_str ) != -1 ){
 
-        streamfilepath = sw_generate_block_store_path( streamfilename );
-        free( streamfilename );
+            char *streamfilepath, *concretefilepath;
 
-        concretefilepath = sw_generate_block_store_path( id->id_str );
+            streamfilepath = sw_generate_block_store_path( streamfilename );
+            free( streamfilename );
 
-        close( id->fd );
-        id->fd = -1;
+            concretefilepath = sw_generate_block_store_path( id->id_str );
 
-        if( !(result = ( rename( streamfilepath, concretefilepath ) == 0 )) ){
+            cielID_close_fd( id );
 
-            perror( "Unable to finalize stream - block-store renaming failed.\n" );
-            fprintf( stderr, "FROM: %s\nTO: %s\n", streamfilepath, concretefilepath );
+            if( !(result = ( rename( streamfilepath, concretefilepath ) == 0 )) ){
 
-        } else {
+                fprintf( stderr, "cielID_finalize_stream(): unable to finalize stream [FROM: %s\nTO: %s\n]", streamfilepath, concretefilepath );
+                perror( "block-store renaming failed\n" );
+                exit( EXIT_FAILURE );
 
-            symlink( concretefilepath, streamfilepath );
+            } else {
+
+                if( symlink( concretefilepath, streamfilepath ) != 0 ){
+
+                    #ifdef DEBUG
+                    perror( "cielID_finalize_stream(): error whilst attempting to create symlink\n" );
+                    #endif
+
+                }
+
+            }
+
+            free( streamfilepath );
+            free( concretefilepath );
 
         }
-
-        free( streamfilepath );
-        free( concretefilepath );
 
     }
 
@@ -248,8 +259,6 @@ size_t cielID_read_streams( cielID *id[], size_t const count ){
             cielID *new_task_id = cielID_create2( sw_generate_new_id( "cldthread", sw_get_current_task_id(), "task" ) );
 
             if(_ciel_spawn_chkpt_task( new_task_id, NULL, id, count, 1 )) i = count;
-
-            cielID_free( new_task_id );
 
             break;
 

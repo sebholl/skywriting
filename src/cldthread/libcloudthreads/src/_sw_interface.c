@@ -14,7 +14,7 @@ static char *_sw_generate_temp_path( const char *const id ){
 
     tmp = sha1_hex_digest_from_bytes( tmp, len, 1 );
 
-    asprintf( &result, "/tmp/cldthread.%s", tmp );
+    ASPRINTF_ORNULL( &result, "/tmp/cldthread.%s", tmp );
 
     free( tmp );
 
@@ -56,7 +56,7 @@ static swref *_sw_post_data_to_worker( const char *const worker_loc,
 
     curl_easy_setopt( handle, CURLOPT_POSTFIELDSIZE, post_data.size );
 
-    asprintf( &post_url, "http://%s/data/%s/", worker_loc, id );
+    ASPRINTF_ORDIE( _sw_post_data_to_worker(), &post_url, "http://%s/data/%s/", worker_loc, id );
 
     #if VERBOSE
     printf("Uploading data to \"%s\".\n", post_url );
@@ -175,7 +175,7 @@ static swref *_sw_post_file_to_worker( const char *const worker_loc, const char 
 
     id = sw_generate_task_id( "cldthread", sw_get_current_task_id(), "file" );
 
-    asprintf( &post_url, "http://%s/data/%s/", worker_loc, id );
+    ASPRINTF_ORDIE( _sw_post_file_to_worker(), &post_url, "http://%s/data/%s/", worker_loc, id );
 
     #if VERBOSE
     printf("Uploading file \"%s\" to \"%s\".\n", filepath, post_url );

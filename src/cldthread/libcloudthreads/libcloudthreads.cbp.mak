@@ -15,7 +15,7 @@ RANLIB = ranlib
 WINDRES = windres
 
 INC =
-CFLAGS = -Wall -std=gnu99
+CFLAGS = -march=pentium4 -O3 -Winit-self -Wcast-align -Wfloat-equal -Winline -Wmissing-declarations -Wmissing-include-dirs -Wextra -Wall -std=gnu99
 RESINC = 
 RCFLAGS = 
 LIBDIR =
