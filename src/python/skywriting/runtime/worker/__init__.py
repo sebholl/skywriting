@@ -13,31 +13,29 @@
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 from skywriting.runtime.worker.upload_manager import UploadManager
 from skywriting.runtime.master.deferred_work import DeferredWorkPlugin
-
-'''
-Created on 4 Feb 2010
-
-@author: dgm36
-'''
+import ciel
 from skywriting.runtime.worker.master_proxy import MasterProxy
-from skywriting.runtime.task_executor import TaskExecutorPlugin, SWInterpreterTaskExecutionRecord
+from skywriting.runtime.task_executor import TaskExecutorPlugin
 from skywriting.runtime.block_store import BlockStore
 from skywriting.runtime.worker.worker_view import WorkerRoot
 from skywriting.runtime.executors import ExecutionFeatures
-from skywriting.runtime.cldthread import CloudThreadExecutor, CloudAppExecutor, CloudThreadTaskExecutionRecord
 from skywriting.runtime.worker.pinger import Pinger
+from skywriting.runtime.file_watcher import create_watcher_thread
 from cherrypy.process import plugins
 import logging
 import tempfile
 import cherrypy
 import skywriting
-import httplib2
 import os
 import socket
 import urlparse
 import simplejson
+import subprocess
 from threading import Lock, Condition
 from datetime import datetime
+from skywriting.runtime.lighttpd import LighttpdAdapter
+from skywriting.runtime.worker.process_pool import ProcessPool
+from skywriting.runtime.worker.multiworker import MultiWorker
 
 class WorkerState:
     pass
@@ -47,34 +45,53 @@ WORKER_ASSOCIATED = WorkerState()
 
 class Worker(plugins.SimplePlugin):
     
-    def __init__(self, bus, hostname, port, options):
+    def __init__(self, bus, port, options):
         plugins.SimplePlugin.__init__(self, bus)
         self.id = None
-        self.hostname = hostname
         self.port = port
         self.master_url = options.master
         self.master_proxy = MasterProxy(self, bus, self.master_url)
         self.master_proxy.subscribe()
-        if options.blockstore is None:
-            block_store_dir = tempfile.mkdtemp(prefix=os.getenv('TEMP', default='/tmp/sw-files-'))
+        if options.hostname is None:
+            self.hostname = self.master_proxy.get_public_hostname()
         else:
-            block_store_dir = options.blockstore
-        self.block_store = BlockStore(cherrypy.engine, self.hostname, self.port, block_store_dir, ignore_blocks=options.ignore_blocks)
+            self.hostname = options.hostname
+        self.lighty_conf_template = options.lighty_conf
+        if options.blockstore is None:
+            self.static_content_root = tempfile.mkdtemp(prefix=os.getenv('TEMP', default='/tmp/sw-files-'))
+        else:
+            self.static_content_root = options.blockstore
+        block_store_dir = os.path.join(self.static_content_root, "data")
+        try:
+            os.mkdir(block_store_dir)
+        except:
+            pass
+        self.block_store = BlockStore(ciel.engine, self.hostname, self.port, block_store_dir, ignore_blocks=options.ignore_blocks, aux_listen_port=options.aux_port)
+        self.block_store.subscribe()
         self.block_store.build_pin_set()
+        self.block_store.check_local_blocks()
+        create_watcher_thread(bus, self.block_store)
         self.upload_deferred_work = DeferredWorkPlugin(bus, 'upload_work')
         self.upload_deferred_work.subscribe()
         self.upload_manager = UploadManager(self.block_store, self.upload_deferred_work)
-        
-        
+		
         self.execution_features = ExecutionFeatures()
-        self.execution_features.register_executor('cloudapp', CloudAppExecutor)
+		self.execution_features.register_executor('cloudapp', CloudAppExecutor)
         self.execution_features.register_executor('cldthread', None )
+		
+        #self.execution_record_types = {'swi': SWInterpreterTaskExecutionRecord,
+        #                              'cldthread': CloudThreadTaskExecutionRecord }
+
+        #self.task_executor = TaskExecutorPlugin(bus, self, self.master_proxy, self.execution_features, 1)
+        #self.task_executor.subscribe()
         
-        self.execution_record_types = {'swi': SWInterpreterTaskExecutionRecord,
-                                       'cldthread': CloudThreadTaskExecutionRecord }
+        self.scheduling_classes = parse_scheduling_class_option(options.scheduling_classes, options.num_threads)
         
-        self.task_executor = TaskExecutorPlugin(bus, self.block_store, self.master_proxy, self.execution_features, self.execution_record_types, 1)
-        self.task_executor.subscribe()
+        self.multiworker = MultiWorker(ciel.engine, self)
+        self.multiworker.subscribe()
+        self.process_pool = ProcessPool(bus, self)
+        self.process_pool.subscribe()
+        self.runnable_executors = self.execution_features.runnable_executors.keys()
         self.server_root = WorkerRoot(self)
         self.pinger = Pinger(bus, self.master_proxy, None, 30)
         self.pinger.subscribe()
@@ -91,10 +108,6 @@ class Worker(plugins.SimplePlugin):
         
         if options.staticbase is not None:
             self.cherrypy_conf["/skyweb"] = { "tools.staticdir.on": True, "tools.staticdir.dir": options.staticbase }
-        if options.lib is not None:
-            self.cherrypy_conf["/stdlib"] = { "tools.staticdir.on": True, "tools.staticdir.dir": options.lib }
-
-
 
         self.subscribe()
 
@@ -105,12 +118,12 @@ class Worker(plugins.SimplePlugin):
     def unsubscribe(self):
         self.bus.unsubscribe('stop', self.stop)
         self.bus.unsubscribe("worker_event", self.add_log_entry)
-        
+
     def netloc(self):
         return '%s:%d' % (self.hostname, self.port)
 
     def as_descriptor(self):
-        return {'netloc': self.netloc(), 'features': self.execution_features.all_features(), 'has_blocks': not self.block_store.is_empty()}
+        return {'netloc': self.netloc(), 'features': self.runnable_executors, 'has_blocks': not self.block_store.is_empty(), 'scheduling_classes': self.scheduling_classes}
 
     def set_master(self, master_details):
         self.master_url = master_details['master']
@@ -119,13 +132,25 @@ class Worker(plugins.SimplePlugin):
 
     def start_running(self):
 
-        cherrypy.engine.start()
-        cherrypy.tree.mount(self.server_root, "", self.cherrypy_conf)
-        if hasattr(cherrypy.engine, "signal_handler"):
-            cherrypy.engine.signal_handler.subscribe()
-        if hasattr(cherrypy.engine, "console_control_handler"):
-            cherrypy.engine.console_control_handler.subscribe()
-        cherrypy.engine.block()
+        app = cherrypy.tree.mount(self.server_root, "", self.cherrypy_conf)
+
+        if self.lighty_conf_template is not None:
+
+            lighty = LighttpdAdapter(ciel.engine, self.lighty_conf_template, self.static_content_root, self.port)
+            lighty.subscribe()
+            # Zap CherryPy's original flavour server
+            cherrypy.server.unsubscribe()
+            server = cherrypy.process.servers.FlupFCGIServer(application=app, bindAddress=lighty.socket_path)
+            adapter = cherrypy.process.servers.ServerAdapter(cherrypy.engine, httpserver=server, bind_addr=lighty.socket_path)
+            # Insert a FastCGI server in its place
+            adapter.subscribe()
+
+        ciel.engine.start()
+        if hasattr(ciel.engine, "signal_handler"):
+            ciel.engine.signal_handler.subscribe()
+        if hasattr(ciel.engine, "console_control_handler"):
+            ciel.engine.console_control_handler.subscribe()
+        ciel.engine.block()
 
     def stop(self):
         with self.log_lock:
@@ -133,15 +158,12 @@ class Worker(plugins.SimplePlugin):
             self.log_condition.notify_all()
     
     def submit_task(self, task_descriptor):
-        cherrypy.engine.publish("worker_event", "Start task " + repr(task_descriptor["task_id"]))
-        cherrypy.engine.publish('execute_task', task_descriptor)
+        ciel.engine.publish("worker_event", "Start task " + repr(task_descriptor["task_id"]))
+        ciel.engine.publish('execute_task', task_descriptor)
                 
     def abort_task(self, task_id):
-        cherrypy.engine.publish("worker_event", "Abort task " + repr(task_id))
+        ciel.engine.publish("worker_event", "Abort task " + repr(task_id))
         self.task_executor.abort_task(task_id)
-
-    def notify_task_streams_done(self, task_id):
-        self.task_executor.notify_streams_done(task_id)
 
     def add_log_entry(self, log_string):
         with self.log_lock:
@@ -161,16 +183,28 @@ class Worker(plugins.SimplePlugin):
             if self.stopping:
                 raise Exception("Worker stopping")
 
+def parse_scheduling_class_option(scheduling_classes, num_threads):
+    """Parse the command-line option for scheduling classes, which are formatted as:
+    CLASS1,N1;CLASS2,N2;..."""
+    
+    # By default, we use the number of threads (-n option (default=1)).
+    if scheduling_classes is None:
+        scheduling_classes = '*,%d' % num_threads
+        return {'*' : num_threads}
+    
+    ret = {}
+    class_strings = scheduling_classes.split(';')
+    for class_string in class_strings:
+        scheduling_class, capacity_string = class_string.split(',')
+        capacity = int(capacity_string)
+        ret[scheduling_class] = capacity
+    return ret
+
 def worker_main(options):
-    local_hostname = None
-    if options.hostname is not None:
-        local_hostname = options.hostname
-    else:
-        local_hostname = socket.getfqdn()
     local_port = cherrypy.config.get('server.socket_port')
     assert(local_port)
     
-    w = Worker(cherrypy.engine, local_hostname, local_port, options)
+    w = Worker(ciel.engine, local_port, options)
     w.start_running()
 
 if __name__ == '__main__':

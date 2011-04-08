@@ -3,22 +3,21 @@ include "grab";
 //include "java";
 
 function java(class_name, input_refs, argv, jar_refs, num_outputs) {
-   f = env["FOO"];
-	return spawn_exec("java", {"inputs" : input_refs, "class" : class_name, "lib" : jar_refs, "argv" : argv, "foo" : f}, num_outputs);
+	 return spawn_exec("java", {"inputs" : input_refs, "class" : class_name, "lib" : jar_refs, "argv" : argv}, num_outputs);
 }  
 
 // Paste the reference returned by sw-load here
-url = env["DATA_REF"];
-input_refs = *grab(url);
+url = package("dataref");
+input_refs = *url;
 
 // Configuration
 num_mappers = len(input_refs);
 num_reducers = 2;
 
 // Change the regexp here
-regexp = "A27";
+regexp = "for";
 
-jar_lib = [grab("http://www.cl.cam.ac.uk/~ms705/sky-eg-grep.jar")];
+jar_lib = [package("grep_jar")];
 
 // -----------------------------------------
 
@@ -48,11 +47,6 @@ reduce_outputs2 = java("skywriting.examples.grep.GrepReducer2", reduce_outputs, 
 
 // -----------------------------------------
 
-ignore = *(spawn_exec("sync", {"inputs" : reduce_outputs2}, 1)[0]);
-
-while (!ignore) { foo = 1; }
-
-return reduce_outputs2[0];
-
+return (*(spawn_exec("sync", {"inputs" : reduce_outputs2}, 1)[0]))[0];
  
 

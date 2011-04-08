@@ -11,25 +11,24 @@
 # WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 # ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-from skywriting.runtime.references import SW2_ConcreteReference,\
-    SW2_TombstoneReference
+
+from shared.references import SW2_ConcreteReference, SW2_TombstoneReference
 from cherrypy.process import plugins
 import urllib2
 from skywriting.runtime.block_store import BLOCK_LIST_RECORD_STRUCT,\
     json_decode_object_hook
 import logging
-import cherrypy
 import os
 import simplejson
 from skywriting.runtime.master.job_pool import RECORD_HEADER_STRUCT,\
-    Job, JOB_ACTIVE
+    Job, JOB_ACTIVE, JOB_RECOVERED
 from skywriting.runtime.task import build_taskpool_task_from_descriptor
+import ciel
 import httplib2
 
 class TaskFailureInvestigator:
     
-    def __init__(self, task_pool, worker_pool, deferred_worker):
-        self.task_pool = task_pool
+    def __init__(self, worker_pool, deferred_worker):
         self.worker_pool = worker_pool
         self.deferred_worker = deferred_worker
         
@@ -38,8 +37,8 @@ class TaskFailureInvestigator:
         
     def _investigate_task_failure(self, task, failure_payload):
         (reason, detail, bindings) = failure_payload
-        cherrypy.log.error('Investigating failure of task %s' % task.task_id, 'TASKFAIL', logging.WARN)
-        cherrypy.log.error('Task failed because %s' % reason, 'TASKPOOL', logging.WARN)
+        ciel.log('Investigating failure of task %s' % task.task_id, 'TASKFAIL', logging.WARN)
+        ciel.log('Task failed because %s' % reason, 'TASKPOOL', logging.WARN)
 
         revised_bindings = {}
         failed_netlocs = set()
@@ -47,19 +46,19 @@ class TaskFailureInvestigator:
         # First, go through the bindings to determine which references are really missing.
         for id, tombstone in bindings.items():
             if isinstance(tombstone, SW2_TombstoneReference):
-                cherrypy.log.error('Investigating reference: %s' % str(tombstone), 'TASKFAIL', logging.WARN)
+                ciel.log('Investigating reference: %s' % str(tombstone), 'TASKFAIL', logging.WARN)
                 failed_netlocs_for_ref = set()
                 for netloc in tombstone.netlocs:
                     h = httplib2.Http()
                     try:
                         response, _ = h.request('http://%s/data/%s' % (netloc, id), 'HEAD')
                         if response['status'] != '200':
-                            cherrypy.log.error('Could not obtain object from %s: status %s' % (netloc, response['status']), 'TASKFAIL', logging.WARN)
+                            ciel.log('Could not obtain object from %s: status %s' % (netloc, response['status']), 'TASKFAIL', logging.WARN)
                             failed_netlocs_for_ref.add(netloc)
                         else:
-                            cherrypy.log.error('Object still available from %s' % netloc, 'TASKFAIL', logging.INFO)
+                            ciel.log('Object still available from %s' % netloc, 'TASKFAIL', logging.INFO)
                     except:
-                        cherrypy.log.error('Could not contact store at %s' % netloc, 'TASKFAIL', logging.WARN)
+                        ciel.log('Could not contact store at %s' % netloc, 'TASKFAIL', logging.WARN)
                         failed_netlocs.add(netloc)
                         failed_netlocs_for_ref.add(netloc)
                 if len(failed_netlocs_for_ref) > 0:
@@ -75,14 +74,14 @@ class TaskFailureInvestigator:
                 self.worker_pool.worker_failed(worker)
                 
         # Finally, propagate the failure to the task pool, so that we can re-run the failed task.
-        self.task_pool.task_failed(task, (reason, detail, revised_bindings))
+        # FIXME: need to route this through the job.
+        task.job.task_graph.task_failed(task, revised_bindings, reason, detail)
 
 class RecoveryManager(plugins.SimplePlugin):
     
-    def __init__(self, bus, job_pool, task_pool, block_store, deferred_worker):
+    def __init__(self, bus, job_pool, block_store, deferred_worker):
         plugins.SimplePlugin.__init__(self, bus)
         self.job_pool = job_pool
-        self.task_pool = task_pool
         self.block_store = block_store
         self.deferred_worker = deferred_worker
         
@@ -105,8 +104,11 @@ class RecoveryManager(plugins.SimplePlugin):
             for block_name, block_size in self.block_store.block_list_generator():
                 conc_ref = SW2_ConcreteReference(block_name, block_size)
                 conc_ref.add_location_hint(self.block_store.netloc)
-                #cherrypy.log.error('Recovering block %s (size=%d)' % (block_name, block_size), 'RECOVERY', logging.INFO)
-                self.task_pool.publish_single_ref(block_name, conc_ref, None, False)                
+                
+                # FIXME: What should we do with recovered blocks?
+                
+                #ciel.log.error('Recovering block %s (size=%d)' % (block_name, block_size), 'RECOVERY', logging.INFO)
+                #self.task_pool.publish_single_ref(block_name, conc_ref, None, False)                
 
     def recover_job_descriptors(self):
         root = self.job_pool.journal_root
@@ -131,27 +133,30 @@ class RecoveryManager(plugins.SimplePlugin):
                 assert record_type == 'T'
                 assert len(root_task_descriptor_string) == root_task_descriptor_length
                 root_task_descriptor = simplejson.loads(root_task_descriptor_string, object_hook=json_decode_object_hook)
-                root_task_id = root_task_descriptor['task_id']
-                root_task = build_taskpool_task_from_descriptor(root_task_id, root_task_descriptor, self.task_pool, None)
-                job = Job(job_id, root_task, job_dir)
+                root_task = build_taskpool_task_from_descriptor(root_task_descriptor, None)
+                
+                # FIXME: Get the job pool to create this job, because it has access to the scheduler queue and task failure investigator.
+                job = Job(job_id, root_task, job_dir, JOB_RECOVERED, self.job_pool)
+                
                 root_task.job = job
                 if result is not None:
                     job.completed(result)
                 self.job_pool.add_job(job)
-                self.task_pool.add_task(root_task)
+                # Adding the job to the job pool should add the root task.
+                #self.task_pool.add_task(root_task)
                 
                 if result is None:
                     self.load_other_tasks_defer(job, journal_file)
-                    cherrypy.log.error('Recovered job %s' % job_id, 'RECOVERY', logging.INFO, False)
-                    cherrypy.log.error('Recovered task %s for job %s' % (root_task_id, job_id), 'RECOVERY', logging.INFO, False)
+                    ciel.log.error('Recovered job %s' % job_id, 'RECOVERY', logging.INFO, False)
+                    ciel.log.error('Recovered task %s for job %s' % (root_task['task_id'], job_id), 'RECOVERY', logging.INFO, False)
                 else:
                     journal_file.close()
-                    cherrypy.log.error('Found information about job %s' % job_id, 'RECOVERY', logging.INFO, False)
+                    ciel.log.error('Found information about job %s' % job_id, 'RECOVERY', logging.INFO, False)
                 
                 
             except:
                 # We have lost critical data for the job, so we must fail it.
-                cherrypy.log.error('Error recovering job %s' % job_id, 'RECOVERY', logging.ERROR, True)
+                ciel.log.error('Error recovering job %s' % job_id, 'RECOVERY', logging.ERROR, True)
                 self.job_pool.add_failed_job(job_id)
 
     def load_other_tasks_defer(self, job, journal_file):
@@ -165,12 +170,12 @@ class RecoveryManager(plugins.SimplePlugin):
             while True:
                 record_header = journal_file.read(RECORD_HEADER_STRUCT.size)
                 if len(record_header) != RECORD_HEADER_STRUCT.size:
-                    cherrypy.log.error('Journal entry truncated for job %s' % job.id, 'RECOVERY', logging.WARNING, False)
+                    ciel.log.error('Journal entry truncated for job %s' % job.id, 'RECOVERY', logging.WARNING, False)
                     break
                 record_type, record_length = RECORD_HEADER_STRUCT.unpack(record_header)
                 record_string = journal_file.read(record_length)
                 if len(record_string) != record_length:
-                    cherrypy.log.error('Journal entry truncated for job %s' % job.id, 'RECOVERY', logging.WARNING, False)
+                    ciel.log.error('Journal entry truncated for job %s' % job.id, 'RECOVERY', logging.WARNING, False)
                     break
                 rec = simplejson.loads(record_string, object_hook=json_decode_object_hook)
                 if record_type == 'R':
@@ -178,26 +183,28 @@ class RecoveryManager(plugins.SimplePlugin):
                 elif record_type == 'T':
                     task_id = rec['task_id']
                     parent_task = self.task_pool.get_task_by_id(rec['parent'])
-                    task = build_taskpool_task_from_descriptor(task_id, rec, self.task_pool, parent_task)
+                    task = build_taskpool_task_from_descriptor(rec, parent_task)
                     task.job = job
                     task.parent.children.append(task)
     
-                    cherrypy.log.error('Recovered task %s for job %s' % (task_id, job.id), 'RECOVERY', logging.INFO, False)
+                    ciel.log.error('Recovered task %s for job %s' % (task_id, job.id), 'RECOVERY', logging.INFO, False)
                     self.task_pool.add_task(task)
                 else:
-                    cherrypy.log.error('Got invalid record type in job %s' % job.id, 'RECOVERY', logging.WARNING, False)
+                    ciel.log.error('Got invalid record type in job %s' % job.id, 'RECOVERY', logging.WARNING, False)
                 
         except:
-            cherrypy.log.error('Error recovering task_journal for job %s' % job.id, 'RECOVERY', logging.WARNING, True)
+            ciel.log.error('Error recovering task_journal for job %s' % job.id, 'RECOVERY', logging.WARNING, True)
 
         finally:
             journal_file.close()
             if job.state == JOB_ACTIVE:
-                cherrypy.log.error('Restarting recovered job %s' % job.id, 'RECOVERY', logging.INFO)
-            self.job_pool.restart_job(job)
+                ciel.log.error('Restarting recovered job %s' % job.id, 'RECOVERY', logging.INFO)
+            # We no longer immediately start a job when recovering it.
+            #self.job_pool.restart_job(job)
 
     def fetch_block_list_defer(self, worker):
-        self.deferred_worker.do_deferred(lambda: self.fetch_block_names_from_worker(worker))
+        ciel.log('Fetching block list is currently disabled', 'RECOVERY', logging.WARNING)
+        #self.deferred_worker.do_deferred(lambda: self.fetch_block_names_from_worker(worker))
         
     def fetch_block_names_from_worker(self, worker):
         '''
@@ -205,7 +212,7 @@ class RecoveryManager(plugins.SimplePlugin):
         references found there.
         '''
         
-        block_file = urllib2.urlopen('http://%s/data/' % worker.netloc)
+        block_file = urllib2.urlopen('http://%s/control/data/' % worker.netloc)
 
         while True:
             record = block_file.read(BLOCK_LIST_RECORD_STRUCT.size)
@@ -215,7 +222,8 @@ class RecoveryManager(plugins.SimplePlugin):
             conc_ref = SW2_ConcreteReference(block_name, block_size)
             conc_ref.add_location_hint(worker.netloc)
             
-            #cherrypy.log.error('Recovering block %s (size=%d)' % (block_name, block_size), 'RECOVERY', logging.INFO)
+            #ciel.log.error('Recovering block %s (size=%d)' % (block_name, block_size), 'RECOVERY', logging.INFO)
+            # FIXME: What should we do with recovered blocks?
             self.task_pool.publish_single_ref(block_name, conc_ref, None, False)
 
         

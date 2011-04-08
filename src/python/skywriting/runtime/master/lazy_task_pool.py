@@ -15,15 +15,15 @@
 from Queue import Queue
 from cherrypy.process import plugins
 from skywriting.runtime.master.job_pool import Job
-from skywriting.runtime.references import SW2_FutureReference, \
-    SW2_ConcreteReference, SWErrorReference, combine_references, SW2_StreamReference
+from shared.references import SW2_FutureReference, \
+    SWErrorReference, combine_references, SW2_StreamReference
 from skywriting.runtime.task import TASK_CREATED, TASK_BLOCKING, TASK_RUNNABLE, \
     TASK_COMMITTED, build_taskpool_task_from_descriptor, TASK_QUEUED, TASK_FAILED, TASK_QUEUED_STREAMING
 from threading import Lock
-import cherrypy
 import collections
 import logging
 import uuid
+import ciel
 
 class LazyTaskPool(plugins.SimplePlugin):
     
@@ -75,22 +75,26 @@ class LazyTaskPool(plugins.SimplePlugin):
         
     def get_reference_info(self, id):
         with self._lock:
-            ref = self.ref_for_output.get(id, SW2_FutureReference(id))
-            consumers = self.consumers_for_output.get(id,[])
+            ref = self.ref_for_output[id]
+            try:
+                consumers = self.consumers_for_output[id]
+            except KeyError:
+                consumers = []
             task = self.task_for_output[id]
             return {'ref': ref, 'consumers': list(consumers), 'task': task.as_descriptor()}
         
-    def add_task(self, task, is_root_task=False):
+    def add_task(self, task, is_root_task=False, may_reduce=True):
+
         if task.task_id not in self.tasks:
             self.tasks[task.task_id] = task
             should_register = True
         else:
-            cherrypy.log('Already seen task %s: do not register its outputs' % task.task_id, 'TASKPOOL', logging.INFO)
+            ciel.log('Already seen task %s: do not register its outputs' % task.task_id, 'TASKPOOL', logging.INFO)
             should_register = False
         
         if is_root_task:
             self.job_outputs[task.expected_outputs[0]] = task.job
-            cherrypy.log('Registering job (%s) interest in output (%s)' % (task.job.id, task.expected_outputs[0]), 'TASKPOOL', logging.INFO)
+            ciel.log('Registering job (%s) interest in output (%s)' % (task.job.id, task.expected_outputs[0]), 'TASKPOOL', logging.INFO)
             self.register_job_interest_for_output(task.expected_outputs[0], task.job)
         
         task.job.add_task(task)
@@ -99,24 +103,23 @@ class LazyTaskPool(plugins.SimplePlugin):
         # task's graph. 
         with self._lock:
             if should_register:
-                should_reduce = self.register_task_outputs(task)
+                should_reduce = self.register_task_outputs(task) and may_reduce
                 if should_reduce:
                     self.do_graph_reduction(root_tasks=[task])
                 elif is_root_task:
                     self.do_graph_reduction(root_tasks=[task])
             elif is_root_task:
-                cherrypy.log('Reducing graph from roots.', 'TASKPOOL', logging.INFO)
+                ciel.log('Reducing graph from roots.', 'TASKPOOL', logging.INFO)
                 self.do_root_graph_reduction()
             
-    def task_completed(self, task, commit_bindings):
+    def task_completed(self, task, commit_bindings, should_publish=True):
         task.set_state(TASK_COMMITTED)
-        worker = task.worker
         
         # Need to notify all of the consumers, which may make other tasks
         # runnable.
         self.publish_refs(commit_bindings, task.job, task=task)
-        if worker is not None:
-            self.bus.publish('worker_idle', worker)
+        if task.worker is not None and should_publish:
+            self.bus.publish('worker_idle', task.worker)
         
     def get_task_queue(self):
         return self.task_queue
@@ -125,7 +128,7 @@ class LazyTaskPool(plugins.SimplePlugin):
 
         (reason, details, bindings) = payload
 
-        cherrypy.log.error('Task failed because %s' % (reason, ), 'TASKPOOL', logging.WARNING)
+        ciel.log.error('Task failed because %s' % (reason, ), 'TASKPOOL', logging.WARNING)
         worker = None
         should_notify_outputs = False
 
@@ -144,7 +147,7 @@ class LazyTaskPool(plugins.SimplePlugin):
                     task.set_state(TASK_FAILED)
                     should_notify_outputs = True
                 else:
-                    cherrypy.log.error('Rescheduling task %s after worker failure' % task.task_id, 'TASKPOOL', logging.WARNING)
+                    ciel.log.error('Rescheduling task %s after worker failure' % task.task_id, 'TASKPOOL', logging.WARNING)
                     task.set_state(TASK_FAILED)
                     self.add_runnable_task(task)
                     self.bus.publish('schedule')
@@ -153,7 +156,7 @@ class LazyTaskPool(plugins.SimplePlugin):
                 # Problem fetching input, so we will have to re-execute it.
                 worker = task.worker
                 for binding in bindings.values():
-                    cherrypy.log('Missing input: %s' % str(binding), 'TASKPOOL', logging.WARNING)
+                    ciel.log('Missing input: %s' % str(binding), 'TASKPOOL', logging.WARNING)
                 self.handle_missing_input(task)
                 
             elif reason == 'RUNTIME_EXCEPTION':
@@ -208,7 +211,7 @@ class LazyTaskPool(plugins.SimplePlugin):
                 return
             self.ref_for_output[global_id] = combined_ref
         except KeyError:
-            if (ref is not None) and (ref.is_consumable()):
+            if ref.is_consumable():
                 self.ref_for_output[global_id] = ref
             else:
                 return
@@ -226,8 +229,8 @@ class LazyTaskPool(plugins.SimplePlugin):
             iter_consumers = consumers.copy()
             # Avoid problems with deletion from set during iteration
             for consumer in iter_consumers:
-                if isinstance(consumer, Job):
-                    consumer.completed(current_ref)
+                if isinstance(consumer, Job) and consumer.job_pool is not None:
+                    consumer.job_pool.job_completed(consumer, current_ref)
                     self.unregister_job_interest_for_output(current_ref.id, consumer)
                 else:
                     self.notify_task_of_reference(consumer, global_id, current_ref)
@@ -237,16 +240,10 @@ class LazyTaskPool(plugins.SimplePlugin):
     def notify_task_of_reference(self, task, id, ref):
         if ref.is_consumable():
             was_queued_streaming = task.is_queued_streaming()
-            was_assigned_streaming = task.is_assigned_streaming()
             was_blocked = task.is_blocked()
-            task.notify_reference_changed(id, ref)
+            task.notify_reference_changed(id, ref, self)
             if was_blocked and not task.is_blocked():
                 self.add_runnable_task(task)
-            elif was_assigned_streaming and not task.is_assigned_streaming():
-                # All input streams have finished; poke the task for prompt finish
-                cherrypy.log.error("Assigned task %s all streams done, notifying" % task.task_id, 
-                                   "TASKPOOL", logging.INFO)
-                self.worker_pool.notify_task_streams_done(task.worker, task)
             elif was_queued_streaming and not task.is_queued_streaming():
                 # Submit this to the scheduler again
                 self.add_runnable_task(task)
@@ -266,7 +263,7 @@ class LazyTaskPool(plugins.SimplePlugin):
             if len(subscribers) == 0:
                 del self.consumers_for_output[ref_id]
         except:
-            cherrypy.log.error("Job %s failed to unsubscribe from ref %s" % (job, ref_id), "TASKPOOL", logging.WARNING)
+            ciel.log.error("Job %s failed to unsubscribe from ref %s" % (job, ref_id), "TASKPOOL", logging.WARNING)
 
     def subscribe_task_to_ref(self, task, ref):
         try:
@@ -283,7 +280,7 @@ class LazyTaskPool(plugins.SimplePlugin):
             if len(subscribers) == 0:
                 del self.consumers_for_output[ref.id]
         except:
-            cherrypy.log.error("Task %s failed to unsubscribe from ref %s" % (task, ref.id), "TASKPOOL", logging.WARNING)
+            ciel.log.error("Task %s failed to unsubscribe from ref %s" % (task, ref.id), "TASKPOOL", logging.WARNING)
             
     def register_task_interest_for_ref(self, task, ref):
         if isinstance(ref, SW2_FutureReference):
@@ -298,12 +295,6 @@ class LazyTaskPool(plugins.SimplePlugin):
             # Otherwise, subscribe to the production of the named output.
             self.subscribe_task_to_ref(task, ref)
             return None
-
-        elif isinstance(ref, SW2_ConcreteReference):
-            # We have a concrete reference for this name, but others may
-            # be waiting on it, so publish it.
-            self._publish_ref(ref.id, ref, task.job, True)
-            return ref
         
         else:
             # We have an opaque reference, which can be accessed immediately.
@@ -344,6 +335,11 @@ class LazyTaskPool(plugins.SimplePlugin):
         # Initially, start with the root set of tasks, based on the desired
         # object IDs.
         for object_id in object_ids:
+            try:
+                if self.ref_for_output[object_id].is_consumable():
+                    continue
+            except KeyError:
+                pass
             task = self.task_for_output[object_id]
             if task.state == TASK_CREATED:
                 # Task has not yet been scheduled, so add it to the queue.
@@ -372,7 +368,6 @@ class LazyTaskPool(plugins.SimplePlugin):
                         task.unfinished_input_streams.add(ref.id)
                         self.subscribe_task_to_ref(task, conc_ref)
                 else:
-                    
                     # The reference is a future that has not yet been produced,
                     # so block the task.
                     task_will_block = True
@@ -383,7 +378,7 @@ class LazyTaskPool(plugins.SimplePlugin):
                     try:
                         producing_task = self.task_for_output[ref.id]
                     except KeyError:
-                        cherrypy.log.error('Task %s cannot access missing input %s and will block until this is produced' % (task.task_id, ref.id), 'TASKPOOL', logging.WARNING)
+                        ciel.log.error('Task %s cannot access missing input %s and will block until this is produced' % (task.task_id, ref.id), 'TASKPOOL', logging.WARNING)
                         continue
                     
                     # The producing task is inactive, so recursively visit it.                    
@@ -407,22 +402,24 @@ class LazyTaskPoolAdapter:
     the new LazyTaskPool.
     """
     
-    def __init__(self, lazy_task_pool):
+    def __init__(self, lazy_task_pool, task_failure_investigator):
         self.lazy_task_pool = lazy_task_pool
+        self.task_failure_investigator = task_failure_investigator
         
         # XXX: This exposes the task pool to the view.
         self.tasks = lazy_task_pool.tasks
      
-    def add_task(self, task_descriptor, parent_task=None, job=None):
+    def add_task(self, task_descriptor, parent_task=None, job=None, may_reduce=True):
         try:
             task_id = task_descriptor['task_id']
         except:
             task_id = self.generate_task_id()
+            task_descriptor['task_id'] = task_id
         
-        task = build_taskpool_task_from_descriptor(task_id, task_descriptor, self, parent_task)
+        task = build_taskpool_task_from_descriptor(task_descriptor, parent_task)
         task.job = job
         
-        self.lazy_task_pool.add_task(task, parent_task is None)
+        self.lazy_task_pool.add_task(task, parent_task is None, may_reduce)
         
         #add_event = self.new_event(task)
         #add_event["task_descriptor"] = task.as_descriptor(long=True)
@@ -450,7 +447,7 @@ class LazyTaskPoolAdapter:
     def publish_refs(self, task, refs):
         self.lazy_task_pool.publish_refs(refs, task.job, True)
     
-    def spawn_child_tasks(self, parent_task, spawned_task_descriptors):
+    def spawn_child_tasks(self, parent_task, spawned_task_descriptors, may_reduce=True):
 
         if parent_task.is_replay_task():
             return
@@ -461,18 +458,39 @@ class LazyTaskPoolAdapter:
             except KeyError:
                 raise
             
-            task = self.add_task(child, parent_task, parent_task.job)
+            task = self.add_task(child, parent_task, parent_task.job, may_reduce)
             parent_task.children.append(task)
             
             if task.continues_task is not None:
                 parent_task.continuation = spawned_task_id
 
-    def commit_task(self, task_id, commit_payload):
+    def report_tasks(self, report):
+        
+        for (parent_id, success, payload) in report:
+            parent_task = self.get_task_by_id(parent_id)
+            if success:
+                (spawned, published) = payload
+                self.spawn_child_tasks(parent_task, spawned, may_reduce=False)
+                self.commit_task(parent_id, {"bindings": dict([(ref.id, ref) for ref in published])}, should_publish=False)
+            else:
+                # Only one failed task per-report, at the moment.
+                self.investigate_task_failure(parent_task, payload)
+                # I hope this frees up workers and so forth?
+                return
+                
+        toplevel_task = self.get_task_by_id(report[0][0])
+        self.lazy_task_pool.do_graph_reduction(toplevel_task.expected_outputs)
+        self.lazy_task_pool.worker_pool.worker_idle(toplevel_task.worker)
+
+    def investigate_task_failure(self, task, payload):
+        self.task_failure_investigator.investigate_task_failure(task, payload)
+
+    def commit_task(self, task_id, commit_payload, should_publish=True):
         
         commit_bindings = commit_payload['bindings']
         task = self.lazy_task_pool.get_task_by_id(task_id)
         
-        self.lazy_task_pool.task_completed(task, commit_bindings)
+        self.lazy_task_pool.task_completed(task, commit_bindings, should_publish)
         
         # Saved continuation URI, if necessary.
         try:

@@ -45,7 +45,7 @@ do
     -f)
       if [[ $2 = '--' ]]; then
          # STDIN input
-         SOURCE=''
+         SOURCE='/dev/stdin'
       else
          # Cluster definition file
          SOURCE=$2
@@ -77,13 +77,18 @@ done
 # main script
 
 I=0
-cat $SOURCE | while myLine=`line`
+exec 3<$SOURCE
+while read -u 3 myLine
 do
     echo -n "Killing instance $I: "
+    
+    # To explain that ridiculous command: pgrep for the tag inserted into all Ciel commands' args by run_master/worker. Then use 'ps' to translate that line of PIDs
+    # into line-delimited pgrps. Then use pkill to zap anything sharing a group with any of them with signal 9.
+    # This handles both daemonised and non-daemonised cases, in which the relevant group is and isn't respectively the group of the root Python process.
     if [[ $VERBOSE -eq 1 ]]; then
-	ssh -o StrictHostKeyChecking=no -f -i $KEY $SWUSER@$myLine "pkill -9 -f sw-master ; pkill -9 -f sw-worker"
+	ssh -o StrictHostKeyChecking=no -f -i $KEY $SWUSER@$myLine $SWROOT/scripts/ciel-killall.sh
     else
-	ssh -o StrictHostKeyChecking=no -f -i $KEY $SWUSER@$myLine "pkill -9 -f sw-master ; pkill -9 -f sw-worker" 1>&2 2>/dev/null
+	ssh -o StrictHostKeyChecking=no -f -i $KEY $SWUSER@$myLine $SWROOT/scripts/ciel-killall.sh 1>&2 2>/dev/null
     fi
     echo $myLine
     I=`expr $I + 1`

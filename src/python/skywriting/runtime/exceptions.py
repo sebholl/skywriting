@@ -18,6 +18,14 @@ Created on 22 Apr 2010
 @author: dgm36
 '''
 
+class WorkerFailedException(Exception):
+    def __init__(self, worker):
+        self.worker = worke
+
+class AbortedException(Exception):
+    def __init__(self):
+        pass
+
 class RuntimeSkywritingError(Exception):
     def __init__(self):
         pass
@@ -60,9 +68,8 @@ class DataTooBigException(ExecutionInterruption):
         self.size = size
         
 class ReferenceUnavailableException(ExecutionInterruption):
-    def __init__(self, ref, continuation):
+    def __init__(self, ref):
         self.ref = ref
-        self.continuation = continuation
         
     def __repr__(self):
         return 'ReferenceUnavailableException(ref=%s)' % (repr(self.ref), )
@@ -77,4 +84,4 @@ class MissingInputException(RuntimeSkywritingError):
         self.bindings = bindings
         
     def __repr__(self):
-        return 'MissingInputException(ref=%s)' % (repr(self.ref), )
+        return 'MissingInputException(refs=%s)' % (repr(self.bindings.values()), )

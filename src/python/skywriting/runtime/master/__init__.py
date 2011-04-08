@@ -12,66 +12,70 @@
 # ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 from __future__ import with_statement
-from skywriting.runtime.master.lazy_task_pool import LazyTaskPool,\
-    LazyTaskPoolAdapter
-from skywriting.runtime.master.lazy_scheduler import LazyScheduler
-from skywriting.runtime.master.deferred_work import DeferredWorkPlugin
-from skywriting.runtime.master.master_view import MasterRoot
-from skywriting.runtime.master.data_store import GlobalNameDirectory
-from skywriting.runtime.master.worker_pool import WorkerPool
 from skywriting.runtime.block_store import BlockStore
-from skywriting.runtime.task_executor import TaskExecutorPlugin
-import skywriting
-import simplejson
-import logging
-import urllib2
-import urllib
-import httplib2
-import tempfile
-import socket
-import cherrypy
-from skywriting.runtime.master.job_pool import JobPool
-import os
-from skywriting.runtime.master.recovery import RecoveryManager,\
-    TaskFailureInvestigator
-from skywriting.runtime.master.hot_standby import BackupSender,\
+from skywriting.runtime.lighttpd import LighttpdAdapter
+from skywriting.runtime.master.deferred_work import DeferredWorkPlugin
+from skywriting.runtime.master.hot_standby import BackupSender, \
     MasterRecoveryMonitor
+from skywriting.runtime.master.job_pool import JobPool
+from skywriting.runtime.master.master_view import MasterRoot
+from skywriting.runtime.master.recovery import RecoveryManager, \
+    TaskFailureInvestigator
+from skywriting.runtime.master.worker_pool import WorkerPool
+from skywriting.runtime.task_executor import TaskExecutorPlugin
+from skywriting.runtime.block_store import post_string
+import cherrypy
+import ciel
+import logging
+import os
+import simplejson
+import skywriting
+import socket
+import subprocess
+import tempfile
+import urllib
+import urllib2
 
 def master_main(options):
 
-    deferred_worker = DeferredWorkPlugin(cherrypy.engine)
+    deferred_worker = DeferredWorkPlugin(ciel.engine)
     deferred_worker.subscribe()
 
-    global_name_directory = GlobalNameDirectory(cherrypy.engine)
-    global_name_directory.subscribe()
-
-    worker_pool = WorkerPool(cherrypy.engine, deferred_worker)
+    worker_pool = WorkerPool(ciel.engine, deferred_worker, None)
     worker_pool.subscribe()
 
-    lazy_task_pool = LazyTaskPool(cherrypy.engine, worker_pool)
-    task_pool_adapter = LazyTaskPoolAdapter(lazy_task_pool)
-    lazy_task_pool.subscribe()
+    task_failure_investigator = TaskFailureInvestigator(worker_pool, deferred_worker)
     
-    task_failure_investigator = TaskFailureInvestigator(lazy_task_pool, worker_pool, deferred_worker)
-    
-    job_pool = JobPool(cherrypy.engine, lazy_task_pool, options.journaldir, global_name_directory)
+    job_pool = JobPool(ciel.engine, options.journaldir, None, task_failure_investigator, deferred_worker, worker_pool)
     job_pool.subscribe()
+    
+    worker_pool.job_pool = job_pool
 
     backup_sender = BackupSender(cherrypy.engine)
     backup_sender.subscribe()
 
-    local_hostname = socket.getfqdn()
+    if options.hostname is not None:
+        local_hostname = options.hostname
+    else:
+        local_hostname = socket.getfqdn()
     local_port = cherrypy.config.get('server.socket_port')
     master_netloc = '%s:%d' % (local_hostname, local_port)
-    print 'Local port is', local_port
+    ciel.log('Local port is %d' % local_port, 'STARTUP', logging.INFO)
     
     if options.blockstore is None:
-        block_store_dir = tempfile.mkdtemp(prefix=os.getenv('TEMP', default='/tmp/sw-files-'))
+        static_content_root = tempfile.mkdtemp(prefix=os.getenv('TEMP', default='/tmp/sw-files-'))
     else:
-        block_store_dir = options.blockstore
+        static_content_root = options.blockstore
+    block_store_dir = os.path.join(static_content_root, "data")
+    try:
+        os.mkdir(block_store_dir)
+    except:
+        pass
 
-    block_store = BlockStore(cherrypy.engine, local_hostname, local_port, block_store_dir)
+    block_store = BlockStore(ciel.engine, local_hostname, local_port, block_store_dir)
+    block_store.subscribe()
     block_store.build_pin_set()
+    block_store.check_local_blocks()
 
     if options.master is not None:
         monitor = MasterRecoveryMonitor(cherrypy.engine, 'http://%s/' % master_netloc, options.master, job_pool)
@@ -79,13 +83,10 @@ def master_main(options):
     else:
         monitor = None
 
-    recovery_manager = RecoveryManager(cherrypy.engine, job_pool, lazy_task_pool, block_store, deferred_worker)
+    recovery_manager = RecoveryManager(ciel.engine, job_pool, block_store, deferred_worker)
     recovery_manager.subscribe()
-
-    scheduler = LazyScheduler(cherrypy.engine, lazy_task_pool, worker_pool)
-    scheduler.subscribe()
-    
-    root = MasterRoot(task_pool_adapter, worker_pool, block_store, global_name_directory, job_pool, backup_sender, monitor, task_failure_investigator)
+  
+    root = MasterRoot(worker_pool, block_store, job_pool, backup_sender, monitor)
 
     cherrypy.config.update({"server.thread_pool" : 50})
 
@@ -94,16 +95,24 @@ def master_main(options):
     if options.staticbase is not None:
         cherrypy_conf["/skyweb"] = { "tools.staticdir.on": True, "tools.staticdir.dir": options.staticbase }
 
-    cherrypy.tree.mount(root, "", cherrypy_conf)
+    app = cherrypy.tree.mount(root, "", cherrypy_conf)
+    lighty_conf_template = options.lighty_conf
+    if lighty_conf_template is not None:
+        lighty = LighttpdAdapter(ciel.engine, lighty_conf_template, static_content_root, local_port)
+        lighty.subscribe()
+        # Zap CherryPy's original flavour server
+        cherrypy.server.unsubscribe()
+        server = cherrypy.process.servers.FlupFCGIServer(application=app, bindAddress=lighty.socket_path)
+        adapter = cherrypy.process.servers.ServerAdapter(cherrypy.engine, httpserver=server, bind_addr=lighty.socket_path)
+        # Insert a FastCGI server in its place
+        adapter.subscribe()
     
-    if hasattr(cherrypy.engine, "signal_handler"):
-        cherrypy.engine.signal_handler.subscribe()
-    if hasattr(cherrypy.engine, "console_control_handler"):
-        cherrypy.engine.console_control_handler.subscribe()
+    if hasattr(ciel.engine, "signal_handler"):
+        ciel.engine.signal_handler.subscribe()
+    if hasattr(ciel.engine, "console_control_handler"):
+        ciel.engine.console_control_handler.subscribe()
 
-    cherrypy.engine.start()
-    
-    
+    ciel.engine.start()
     
     if options.workerlist is not None:
         master_details = {'netloc': master_netloc}
@@ -111,27 +120,26 @@ def master_main(options):
         with (open(options.workerlist, "r")) as f:
             for worker_url in f.readlines():
                 try:
-                    http = httplib2.Http()
-                    http.request(urllib2.urlparse.urljoin(worker_url, '/master/'), "POST", master_details_as_json)
+                    post_string(urllib2.urlparse.urljoin(worker_url, 'control/master/'), master_details_as_json)
                     # Worker will be created by a callback.
                 except:
-                    cherrypy.log.error("Error adding worker: %s" % (worker_url, ), "WORKER", logging.WARNING)
+                    ciel.log.error("Error adding worker: %s" % (worker_url, ), "WORKER", logging.WARNING)
                     
-    cherrypy.engine.block()
+    ciel.engine.block()
 
-#    sch = SchedulerProxy(cherrypy.engine)
+#    sch = SchedulerProxy(ciel.engine)
 #    sch.subscribe()
 #
-#    reaper = WorkerReaper(cherrypy.engine)
+#    reaper = WorkerReaper(ciel.engine)
 #    reaper.subscribe()
 #
-#    wr = WorkflowRunner(cherrypy.engine)
+#    wr = WorkflowRunner(ciel.engine)
 #    wr.subscribe()
 #
-#    te = TaskExecutor(cherrypy.engine)
+#    te = TaskExecutor(ciel.engine)
 #    te.subscribe()
 #
-#    ph = PingHandler(cherrypy.engine)
+#    ph = PingHandler(ciel.engine)
 #    ph.subscribe()
 
 if __name__ == '__main__':

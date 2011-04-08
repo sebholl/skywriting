@@ -11,27 +11,20 @@
 # WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 # ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-
-'''
-Created on 13 Apr 2010
-
-@author: dgm36
-'''
 from __future__ import with_statement
-from cherrypy.process.plugins import SimplePlugin
+import ciel
 from Queue import Queue
 import logging
-import cherrypy
 import threading
 
 class ThreadTerminator:
     pass
 THREAD_TERMINATOR = ThreadTerminator()
 
-class AsynchronousExecutePlugin(SimplePlugin):
+class AsynchronousExecutePlugin:
     
-    def __init__(self, bus, num_threads, subscribe_event, publish_success_event=None, publish_fail_event=None):
-        SimplePlugin.__init__(self, bus)
+    def __init__(self, bus, num_threads, subscribe_event=None, publish_success_event=None, publish_fail_event=None):
+        self.bus = bus
         self.threads = []
         
         self.queue = Queue()
@@ -44,12 +37,14 @@ class AsynchronousExecutePlugin(SimplePlugin):
     def subscribe(self):
         self.bus.subscribe('start', self.start)
         self.bus.subscribe('stop', self.stop)
-        self.bus.subscribe(self.subscribe_event, self.receive_input)
+        if self.subscribe_event is not None:
+            self.bus.subscribe(self.subscribe_event, self.receive_input)
             
     def unsubscribe(self):
         self.bus.unsubscribe('start', self.start)
         self.bus.unsubscribe('stop', self.stop)
-        self.bus.unsubscribe(self.subscribe_event, self.receive_input)
+        if self.subscribe_event is not None:
+            self.bus.unsubscribe(self.subscribe_event, self.receive_input)
             
     def start(self):
         self.is_running = True
@@ -86,7 +81,7 @@ class AsynchronousExecutePlugin(SimplePlugin):
                 if self.publish_fail_event is not None:
                     self.bus.publish(self.publish_fail_event, input, ex)
                 else:
-                    cherrypy.log.error('Error handling input in %s' % (self.__class__, ), 'PLUGIN', logging.ERROR, True)
+                    ciel.log.error('Error handling input in %s' % (self.__class__, ), 'PLUGIN', logging.ERROR, True)
 
     def handle_input(self, input):
         """Override this method to specify the behaviour on processing a single input."""

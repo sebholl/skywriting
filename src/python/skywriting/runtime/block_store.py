@@ -12,7 +12,7 @@
 # ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 from __future__ import with_statement
-from threading import Lock
+from threading import RLock, Lock
 from skywriting.runtime.exceptions import \
     MissingInputException, RuntimeSkywritingError
 import random
@@ -23,31 +23,36 @@ import os
 import uuid
 import struct
 import tempfile
-import cherrypy
 import logging
 import pycurl
 import select
 import fcntl
 import re
 import threading
+import codecs
 from datetime import datetime, timedelta
 import time
 from cStringIO import StringIO
 from errno import EAGAIN, EPIPE
 from cherrypy.process import plugins
+from shared.io_helpers import MaybeFile
+from skywriting.runtime.file_watcher import get_watcher_thread
 
 # XXX: Hack because urlparse doesn't nicely support custom schemes.
 import urlparse
 import simplejson
-from skywriting.runtime.references import SWRealReference,\
+from shared.references import SWRealReference,\
     build_reference_from_tuple, SW2_ConcreteReference, SWDataValue,\
-    SWErrorReference, SWURLReference, \
-    SW2_StreamReference,\
-    SW2_TombstoneReference, SW2_FetchReference, SWReferenceJSONEncoder
+    SWErrorReference, SW2_StreamReference,\
+    SW2_TombstoneReference, SW2_FetchReference, SW2_FixedReference,\
+    SW2_SweetheartReference, SW2_CompletedReference, SW2_SocketStreamReference
+from skywriting.runtime.references import SWReferenceJSONEncoder
 import hashlib
 import contextlib
 from skywriting.lang.parser import CloudScriptParser
 import skywriting
+import ciel
+import socket
 urlparse.uses_netloc.append("swbs")
 
 BLOCK_LIST_RECORD_STRUCT = struct.Struct("!120pQ")
@@ -60,6 +65,8 @@ http_response_regex = re.compile("^HTTP/1.1 ([0-9]+)")
 class StreamRetry:
     pass
 STREAM_RETRY = StreamRetry()
+
+singleton_blockstore = None
 
 def get_netloc_for_sw_url(url):
     return urlparse.urlparse(url).netloc
@@ -81,11 +88,13 @@ def sw_to_external_url(url):
     else:
         return url
 
-class pycURLFetchContext:
+class pycURLContext:
 
-    def __init__(self, callback_obj, url, range=None):
+    def __init__(self, url, multi, result_callback):
 
-        self.description = url
+        self.multi = multi
+        self.result_callback = result_callback
+        self.url = url
 
         self.curl_ctx = pycurl.Curl()
         self.curl_ctx.setopt(pycurl.FOLLOWLOCATION, 1)
@@ -93,21 +102,71 @@ class pycURLFetchContext:
         self.curl_ctx.setopt(pycurl.CONNECTTIMEOUT, 30)
         self.curl_ctx.setopt(pycurl.TIMEOUT, 300)
         self.curl_ctx.setopt(pycurl.NOSIGNAL, 1)
-        self.curl_ctx.setopt(pycurl.WRITEFUNCTION, callback_obj.write_data)
-        self.curl_ctx.setopt(pycurl.HEADERFUNCTION, callback_obj.write_header_line)
         self.curl_ctx.setopt(pycurl.URL, str(url))
-        self.curl_ctx.ctx = self
-        if range is not None:
-            (start_range, end_range) = range
-            if end_range is None:
-                self.curl_ctx.setopt(pycurl.HTTPHEADER, ["Range: bytes=%d-" % start_range])
-            else:
-                self.curl_ctx.setopt(pycurl.HTTPHEADER, ["Range: bytes=%d-%d" % range])
 
-        self.callbacks = callback_obj
-            
+        self.curl_ctx.ctx = self
+
+    def start(self):
+        self.multi.add_fetch(self)
+
+    def success(self):
+        self.result_callback(True)
+        self.cleanup()
+
+    def failure(self, errno, errmsg):
+        ciel.log("Transfer failure: %s error %s / %s" % (self.url, errno, errmsg), "CURL", logging.WARNING)
+        self.result_callback(False)
+        self.cleanup()
+
+    def cancel(self):
+        self.multi.remove_fetch(self)
+
     def cleanup(self):
         self.curl_ctx.close()
+
+
+class pycURLFetchContext(pycURLContext):
+
+    def __init__(self, dest_fp, src_url, multi, result_callback, progress_callback=None, start_byte=None):
+
+        pycURLContext.__init__(self, src_url, multi, result_callback)
+
+        self.description = src_url
+        self.progress_callback = None
+
+        self.curl_ctx.setopt(pycurl.WRITEDATA, dest_fp)
+        if progress_callback is not None:
+            self.curl_ctx.setopt(pycurl.NOPROGRESS, False)
+            self.curl_ctx.setopt(pycurl.PROGRESSFUNCTION, self.progress)
+            self.progress_callback = progress_callback
+        if start_byte is not None and start_byte != 0:
+            self.curl_ctx.setopt(pycurl.HTTPHEADER, ["Range: bytes=%d-" % start_byte])
+
+    def success(self):
+        self.progress_callback(self.curl_ctx.getinfo(pycurl.SIZE_DOWNLOAD))
+        pycURLContext.success(self)
+
+    def progress(self, toDownload, downloaded, toUpload, uploaded):
+        self.progress_callback(downloaded)
+
+class pycURLBufferContext(pycURLContext):
+
+    def __init__(self, method, in_str, out_fp, url, multi, result_callback):
+        
+        pycURLContext.__init__(self, url, multi, result_callback)
+
+        self.write_fp = out_fp
+
+        self.curl_ctx.setopt(pycurl.WRITEFUNCTION, self.write)
+        if method == "POST":
+            self.curl_ctx.setopt(pycurl.POST, True)
+            self.curl_ctx.setopt(pycurl.POSTFIELDS, in_str)
+            self.curl_ctx.setopt(pycurl.POSTFIELDSIZE, len(in_str))
+            self.curl_ctx.setopt(pycurl.HTTPHEADER, ["Content-Type: application/octet-stream", "Expect:"])
+
+    def write(self, data):
+        self.write_fp.write(data)
+        return len(data)
 
 class SelectableEventQueue:
 
@@ -151,11 +210,12 @@ class SelectableEventQueue:
     def dispatch_events(self):
         with self._lock:
             ret = (len(self.event_queue) > 0)
-            for event in self.event_queue:
-                event()
+            to_run = self.event_queue
             self.event_queue = []
             self.drain_event_pipe()
-            return ret
+        for event in to_run:
+            event()
+        return ret
 
     def get_select_fds(self):
         return [self.event_pipe_read], [], []
@@ -172,47 +232,60 @@ class pycURLThread:
         self.curl_ctx = pycurl.CurlMulti()
         self.curl_ctx.setopt(pycurl.M_PIPELINING, 1)
         self.curl_ctx.setopt(pycurl.M_MAXCONNECTS, 20)
-        self.contexts = []
         self.active_fetches = []
         self.event_queue = SelectableEventQueue()
+        self.aux_listen_socket = None
         self.dying = False
 
     def start(self):
         self.thread = threading.Thread(target=self.pycurl_main_loop)
         self.thread.start()
 
-    def _add_fetch(self, callbacks, url, range):
-        new_context = pycURLFetchContext(callbacks, url, range)
+    # Called from cURL thread
+    def add_fetch(self, new_context):
         self.active_fetches.append(new_context)
         self.curl_ctx.add_handle(new_context.curl_ctx)
 
-    def add_fetch(self, callbacks, url, range=None):
-        callback_obj = lambda: self._add_fetch(callbacks, url, range)
-        self.event_queue.post_event(callback_obj)
+    def do_from_curl_thread(self, callback):
+        self.event_queue.post_event(callback)
 
-    def _add_context(self, ctx):
-        cherrypy.log.error("Event source registered", "CURL_FETCH", logging.INFO)
-        self.contexts.append(ctx)
-
-    def add_context(self, ctx):
-        self.event_queue.post_event(lambda: self._add_context(ctx))
-
-    def _remove_context(self, ctx, e):
-        cherrypy.log.error("Event source unregistered", "CURL_FETCH", logging.INFO)
-        self.contexts.remove(ctx)
+    def call_and_signal(self, callback, e, ret):
+        ret.ret = callback()
         e.set()
 
-    # Synchronous so that when this call returns the caller definitely will not get any more callbacks
-    def remove_context(self, ctx):
+    class ReturnBucket:
+        def __init__(self):
+            self.ret = None
+
+    def do_from_curl_thread_sync(self, callback):
         e = threading.Event()
-        self.event_queue.post_event(lambda: self._remove_context(ctx, e))
+        ret = pycURLThread.ReturnBucket()
+        self.event_queue.post_event(lambda: self.call_and_signal(callback, e, ret))
         e.wait()
+        return ret.ret
+
+    def _set_aux_listen_socket(self, socket, cb):
+        self.aux_listen_socket = socket
+        self.aux_listen_callback = cb
+
+    def set_aux_listen_port(self, port, new_connection_callback):
+        if port is not None:
+            ciel.log("Listening for auxiliary connections on port %d" % port, "TCP_FETCH", logging.INFO)
+            aux_listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            aux_listen_socket.bind(("0.0.0.0", port))
+            aux_listen_socket.listen(5)
+            aux_listen_socket.setblocking(False)
+            self.do_from_curl_thread(lambda: self._set_aux_listen_socket(aux_listen_socket, new_connection_callback))
 
     def _stop_thread(self):
         self.dying = True
     
     def stop(self):
         self.event_queue.post_event(self._stop_thread)
+
+    def remove_fetch(self, ctx):
+        self.curl_ctx.remove_handle(ctx.curl_ctx)
+        self.active_fetches.remove(ctx)
 
     def pycurl_main_loop(self):
         while True:
@@ -232,19 +305,18 @@ class pycURLThread:
                     for c in ok_list:
                         self.curl_ctx.remove_handle(c)
                         response_code = c.getinfo(pycurl.RESPONSE_CODE)
-#                        cherrypy.log.error("Curl success: %s -- %s" % (c.ctx.description, str(response_code)))
+#                        ciel.log.error("Curl success: %s -- %s" % (c.ctx.description, str(response_code)))
                         if str(response_code).startswith("2"):
-                            c.ctx.callbacks.success()
+                            c.ctx.success()
                         else:
-                            c.ctx.callbacks.failure(response_code, "")
-                        c.ctx.cleanup()
+                            ciel.log.error("Curl failure: HTTP %s" % str(response_code), "CURL_FETCH", logging.WARNING)
+                            c.ctx.failure(response_code, "")
                         self.active_fetches.remove(c.ctx)
                     for c, errno, errmsg in err_list:
                         self.curl_ctx.remove_handle(c)
-                        cherrypy.log.error("Curl failure: %s, %s" % 
+                        ciel.log.error("Curl failure: %s, %s" % 
                                            (str(errno), str(errmsg)), "CURL_FETCH", logging.WARNING)
-                        c.ctx.callbacks.failure(errno, errmsg)
-                        c.ctx.cleanup()
+                        c.ctx.failure(errno, errmsg)
                         self.active_fetches.remove(c.ctx)
                     if num_q == 0:
                         break
@@ -265,629 +337,275 @@ class pycURLThread:
             read_fds.extend(ev_rfds)
             write_fds.extend(ev_wfds)
             exn_fds.extend(ev_exfds)
-            # Reason #3: one of our contexts has an interesting FD
-            for ctx in self.contexts:
-                ctx_read, ctx_write, ctx_exn = ctx.get_select_fds()
-                read_fds.extend(ctx_read)
-                write_fds.extend(ctx_write)
-                exn_fds.extend(ctx_exn)
-            # Reason #4: one of our contexts wants a callback after a timeout
-            select_timeout = None
-            def td_secs(td):
-                return (float(td.microseconds) / 10**6) + float(td.seconds)
-            for ctx in self.contexts:
-                ctx_timeout = ctx.get_timeout()
-                if ctx_timeout is not None:
-                    time_now = datetime.now()
-                    if ctx_timeout < time_now:
-                        select_timeout = 0
-                    else:
-                        time_to_wait = td_secs(ctx_timeout - datetime.now())
-                        if select_timeout is None or time_to_wait < select_timeout:
-                            select_timeout = time_to_wait
-            active_read, active_write, active_exn = select.select(read_fds, write_fds, exn_fds, select_timeout)
-            for ctx in self.contexts:
-                ctx.select_callback(active_read, active_write, active_exn)
+            if self.aux_listen_socket is not None:
+                read_fds.append(self.aux_listen_socket.fileno())
+            active_read, active_write, active_exn = select.select(read_fds, write_fds, exn_fds)
+            if self.aux_listen_socket is not None:
+                if self.aux_listen_socket.fileno() in active_read:
+                    (new_sock, _) = self.aux_listen_socket.accept()
+                    self.aux_listen_callback(new_sock)
 
-# Callbacks for a single fetch
-class pycURLFetchCallbacks:
+class SocketAttempt:
 
-    def write_data(self, str):
-        pass
-
-    def write_header_line(self, str):
-        pass
-    
-    def success(self):
-        pass
-
-    def failure(self, errno, errstr):
-        pass
-
-# Callbacks for "contexts," things which add event sources for which I need a better name.
-class pycURLContextCallbacks:
-
-    def get_select_fds(self):
-        return [], [], []
-
-    def get_timeout(self):
-        return None
-
-    def select_callback(self, rd, wr, exn):
-        pass
-
-class RetryTransferContext(pycURLFetchCallbacks):
-
-    def __init__(self, urls, multi, done_callback):
-        self.urls = urls
-        self.multi = multi
-        self.failures = 0
-        self.has_completed = False
-        self.has_succeeded = False
-        self.bytes_written = 0
-        self.done_callback = done_callback
+    def __init__(self, refid, otherend_hostname, otherend_port, result_callback):
+        self.otherend_hostname = otherend_hostname
+        self.otherend_port = otherend_port
+        self.refid = refid
+        self.result_callback = result_callback
+        self.thread = threading.Thread(target=self.thread_main)
+        self.lock = threading.Lock()
+        self.done = False
 
     def start(self):
-        self.multi.add_fetch(self, self.urls[0])
+        self.thread.start()
 
-    def success(self):
-        self.has_completed = True
-        self.has_succeeded = True
-        self.done_callback()
+    def cancel(self):
+        with self.lock:
+            if self.done:
+                return
+            else:
+                self.sock.close()
+                self.done = True
 
-    def failure(self, errno, errmsg):
-        self.failures += 1
-        self.reset()
+    def thread_main(self):
         try:
-            self.multi.add_fetch(self, self.urls[self.failures])
-        except IndexError:
-            cherrypy.log.error('No more URLs to try.', 'BLOCKSTORE', logging.ERROR)
-            self.has_completed = True
-            self.has_succeeded = False
-            self.done_callback()
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            ciel.log("Connecting %s:%s" % (self.otherend_hostname, self.otherend_port), "TCP_FETCH", logging.INFO)
+            self.sock.connect(self.otherend_hostname, self.otherend_port)
+            self.sock.sendall("%s\n" % self.refid)
+            ciel.log("%s:%s connected: requesting %s" % (self.otherend_hostname, self.otherend_port, self.refid), "TCP_FETCH", logging.INFO)
+            with self.sock.makefile("r") as fp:
+                response = fp.readline().strip()
+            with self.lock:
+                self.done = True
+                if response.find("GO") != -1:
+                    self.result_callback(True, self.sock)
+                else:
+                    ciel.log("%s:%s request for %s failed: other end said '%s'" % (self.otherend_hostname, self.otherend_port, self.refid, response), "TCP_FETCH", logging.WARNING)
+                    self.sock.close()
+                    self.result_callback(False, None)
+        except Exception as e:
+            ciel.log("SocketAttempt for ref %s failed due to %s" % (self.refid, repr(e)), "TCP_FETCH", logging.ERROR)
+            self.result_callback(False, None)
 
-    def reset(self):
-        pass
+class FileTransferContext:
 
-class FileTransferContext(RetryTransferContext):
-
-    def __init__(self, urls, save_id, multi, callback):
-        RetryTransferContext.__init__(self, urls, multi, callback)
-        with tempfile.NamedTemporaryFile(delete=False) as sinkfile:
-            self.sinkfile_name = sinkfile.name
-        self.sink_fp = open(self.sinkfile_name, "wb")
-        self.save_id = save_id
-
-    def write_data(self, _str):
-        cherrypy.log.error("Fetching file syncly %s writing %d bytes" % 
-                           (self.save_id, len(_str)), 'CURL_FETCH', logging.DEBUG)
-        self.bytes_written += len(_str)
-        ret = self.sink_fp.write(_str)
-        cherrypy.log.error("Now at position %d (result of write was %s)" % 
-                           (self.sink_fp.tell(), str(ret)), 'CURL_FETCH', logging.DEBUG)
-
-    def reset(self):
-        cherrypy.log.error('Failed to fetch %s from %s, retrying...' % 
-                           (self.save_id, self.urls[self.failures-1]), 
-                           'BLOCKSTORE', logging.WARNING)
-        self.sink_fp.seek(0)
-        self.sink_fp.truncate(0)
-
-    def cleanup(self):
-        cherrypy.log.error('Closing sink file for %s (wrote %d bytes, tell = %d, errors = %s)' % 
-                           (self.save_id, self.bytes_written, self.sink_fp.tell(), str(self.sink_fp.errors)), 
-                           'CURL_FETCH', logging.DEBUG)
-        self.sink_fp.close()
-        cherrypy.log.error('File now closed (errors = %s)' % 
-                           self.sink_fp.errors, 'CURL_FETCH', logging.DEBUG)
-
-    def save_result(self, block_store):
-        if self.has_completed and self.has_succeeded:
-            block_store.store_file(self.sinkfile_name, self.save_id, True)
-
-class BufferTransferContext(RetryTransferContext):
-
-    def __init__(self, urls, multi, callback):
-        RetryTransferContext.__init__(self, urls, multi, callback)
-        self.buffer = StringIO()
-
-    def write_data(self, _str):
-        self.buffer.write(_str)
-
-    def reset(self):
-        self.buffer.close()
-        self.buffer = StringIO()
-
-    def cleanup(self):
-        self.buffer.close()
-
-class WaitableTransferGroup:
-
-    def __init__(self):
-        self._lock = threading.Lock()
-        self._cond = threading.Condition(self._lock)
-        self.transfers_done = 0
-
-    def transfer_completed_callback(self):
-        with self._lock:
-            self.transfers_done += 1
-            self._cond.notify_all()
-
-    def wait_for_transfers(self, n):
-        with self._lock:
-            while self.transfers_done < n:
-                self._cond.wait()
-
-class StreamTransferGroup(WaitableTransferGroup):
-    def __init__(self):
-        WaitableTransferGroup.__init__(self)
-        self.handles = []
-        self.handles_lock = threading.Lock()
-
-    def add_handle(self, h):
-        with self.handles_lock:
-            self.handles.append(h)
-
-    def notify_streams_done(self):
-        # Out-of-thread call. Might overlap with any other member functions.
-        # I think this is enough; consumer_attached/detached can overlap freely,
-        # as they're synchronised by post_event, whilst cleanup only runs once the
-        # transfer is done, which the event handler checks for.
-        with self.handles_lock:
-            for h in self.handles:
-                h.try_again_now()
-
-    def wait_for_all_transfers(self):
-        self.wait_for_transfers(len(self.handles))
-
-    def consumers_attached(self):
-        for h in self.handles:
-            h.consumer_attached()
-
-    def consumers_detached(self):
-        for h in self.handles:
-            h.consumer_detached()
-
-    def log_traces(self):
-        for h in self.handles:
-            h.log_trace()
-
-    def cleanup(self, block_store):
-        for handle in self.handles:
-            # Cleanup must happen first, because it typically closes the file that we are storing in the block store.
-            handle.cleanup()
-            handle.save_result(block_store)
-        
-    def get_failed_refs(self):
-        failure_bindings = {}
-        for handle in self.handles:
-            if not handle.has_succeeded:
-                failure_bindings[handle.ref.id] = SW2_TombstoneReference(handle.ref.id, handle.ref.location_hints)
-        if len(failure_bindings) > 0:
-            return failure_bindings
-        else:
-            return None
-
-FIFO_UNCONNECTED = 0
-FIFO_CONNECTED = 1
-FIFO_DEAD = 2
-
-class StreamTransferContext(pycURLContextCallbacks):
-    # Represents a complete stream attempt which might involve many fetches
-
-    class StreamFetchContext(pycURLFetchCallbacks):
-        # Represents a single HTTP-fetch attempt in stream
-
-        def __init__(self, ctx, description, range):
-            self.ctx = ctx
-            self.response_had_stream = False
-            self.request_length = None
-            self.first_header = True
-            self.response_code = None
-            self.description = description
-            self.range = range
-        
-        def write_data(self, _str):
-            # Don't write error-documents to our client process
-            if self.response_code is not None and self.response_code < 300:
-                self.ctx.write_data(_str)
-
-        def write_header_line(self, _str):
-            if self.first_header:
-                self.first_header = False
-                match_obj = http_response_regex.match(_str)
-                if match_obj is not None:
-                    self.response_code = int(match_obj.group(1))
-            if _str.startswith("Pragma") != -1 and _str.find("streaming") != -1:
-                self.response_had_stream = True
-
-            # XXX: If response does not contain a Content-Length header, 
-            #      self.request_length will be set to None.
-            match_obj = length_regex.match(_str)
-            if match_obj is not None:
-                self.request_length = int(match_obj.group(1))
-
-        def success(self):
-            self.ctx.request_succeeded()
-
-        def failure(self, errno, errstr):
-            self.ctx.request_failed(errno, errstr)
-
-    class StreamFifoSink:
-        def __init__(self, fifo_name, max_buffer_level, report_index, do_log=False):
-            self.dummy_read_fd = os.open(fifo_name, os.O_RDONLY | os.O_NONBLOCK)
-            self.fifo_fd = os.open(fifo_name, os.O_WRONLY | os.O_NONBLOCK)
-            self.fifo_state = FIFO_UNCONNECTED
-            self.mem_buffer = ""
-            self.buffer_limit = max_buffer_level
-            self.eof = False
-            self.report_index = report_index
-            if do_log:
-                self.io_trace = []
-            else:
-                self.io_trace = None
-
-        def trace_event(self, str):
-            if self.io_trace is not None:
-                self.io_trace.append((time.time(), str))
-
-        def log_trace(self):
-            for (t, e) in self.io_trace:
-                cherrypy.engine.publish("worker_event", "Fetch FIFO trace %d %f %s" % (self.report_index, t, e))
-
-        def write_without_blocking(self, fd, _str):
-            total_written = 0
-            while len(_str) > 0:
-                try:
-                    bytes_written = os.write(self.fifo_fd, _str)
-                    _str = _str[bytes_written:]
-                    total_written += bytes_written
-                except OSError, e:
-                    if e.errno == EAGAIN:
-                        return total_written
-                    else:
-                        raise
-            return total_written
-
-        def buffer_empty(self):
-            return (len(self.mem_buffer) == 0)
-
-        def try_empty_buffer(self):
-            assert self.fifo_state == FIFO_CONNECTED
-            if not self.buffer_empty():
-                try:
-                    written = self.write_without_blocking(self.fifo_fd, self.mem_buffer)
-                    self.mem_buffer = self.mem_buffer[written:]
-                except OSError, e:
-                    if e.errno == EPIPE:
-                        self.consumer_detached()
-                    else:
-                        raise
-            else:
-                self.trace_event("Buffer empty")
-            if self.buffer_empty() and self.eof:
-                self.consumer_detached()
-
-        
-        def write_data(self, _str):
-            if self.fifo_state == FIFO_DEAD:
-                return
-            elif self.fifo_state == FIFO_UNCONNECTED:
-                self.mem_buffer += _str
-            elif self.fifo_state == FIFO_CONNECTED:
-                self.try_empty_buffer()
-                if self.fifo_state == FIFO_CONNECTED:
-                    if not self.buffer_empty():
-                        self.mem_buffer += _str
-                    else:
-                        written = self.write_without_blocking(self.fifo_fd, _str)
-                        if written < len(_str):
-                            self.trace_event("Buffer not empty")
-                            self.mem_buffer += _str[written:]
-
-        def write_data_eof(self):
-            # If the FIFO is still unconnected we should wait for it to become connected.
-            # If it's connected already, just hang up.
-            self.eof = True
-            self.trace_event("EOF")
-            if self.fifo_state == FIFO_CONNECTED:
-                if self.buffer_empty():
-                    self.consumer_detached()
-                # Otherwise this will happen in try_empty_buffer
-            elif self.fifo_state == FIFO_DEAD:
-                return
-            elif self.fifo_state == FIFO_UNCONNECTED:
-                # EOF will be delivered in consumer_attached, by way of try_empty_buffer.
-                return
-
-        def select_fds(self):
-            if self.fifo_state == FIFO_CONNECTED and not self.buffer_empty():
-                return [], [self.fifo_fd], []
-            else:
-                return [], [], []
-
-        def select_callback(self, rd, wr, exn):
-            if self.fifo_state == FIFO_CONNECTED and self.fifo_fd in wr:
-                self.try_empty_buffer()
-
-        def max_allowable_fetch(self):
-            if self.fifo_state == FIFO_UNCONNECTED or self.fifo_state == FIFO_CONNECTED:
-                return self.buffer_limit - len(self.mem_buffer)
-            else:
-                return None
-
-        def consumer_attached(self):
-            assert self.fifo_state == FIFO_UNCONNECTED
-            self.trace_event("Became attached")
-            self.fifo_state = FIFO_CONNECTED
-            os.close(self.dummy_read_fd)
-            self.dummy_read_fd = -1
-            self.try_empty_buffer()
-
-        def consumer_detached(self):
-            self.trace_event("Became detached")
-            if self.fifo_state == FIFO_DEAD:
-                return
-            elif self.fifo_state == FIFO_UNCONNECTED:
-                os.close(self.fifo_fd)
-                os.close(self.dummy_read_fd)
-                self.fifo_fd = -1
-                self.dummy_read_fd = -1
-                self.mem_buffer = ""
-            elif self.fifo_state == FIFO_CONNECTED:
-                os.close(self.fifo_fd)
-                self.fifo_fd = -1
-                self.mem_buffer = ""
-            self.fifo_state = FIFO_DEAD
-            
-    def __init__(self, ref, urls, save_id, multi, completion_callback, report_index, do_io_trace=False):
-        self.ref = ref
+    def __init__(self, urls, save_filename, multi, callbacks):
         self.urls = urls
-        self.failures = 0
-        self.has_completed = False
-        self.has_succeeded = False
-
-        # Hard-coded stream behaviour
-        self.max_in_memory_buffer = 1048576
-        self.min_fetch_size = 262144
-
-        self.fifo_dir = tempfile.mkdtemp()
-        self.fifo_name = os.path.join(self.fifo_dir, 'fetch_fifo')
-        os.mkfifo(self.fifo_name)
-        self.fifo_sink = StreamTransferContext.StreamFifoSink(self.fifo_name, self.max_in_memory_buffer, report_index, do_io_trace)
-        with tempfile.NamedTemporaryFile(delete=False) as sinkfile:
-            self.sinkfile_name = sinkfile.name
-        self.sink_fp = open(self.sinkfile_name, "wb")
-        self.current_start_byte = 0
-
-        self.have_written_to_process = False
-        self.current_fetch = None
-        self.dormant_until = None
-        self.requests_paused = False
-        self.event_queue = SelectableEventQueue()
-
-        self.save_id = save_id
         self.multi = multi
-        self.description = self.urls[0]
-        self.completion_callback = completion_callback
-        self.report_index = report_index
-        if do_io_trace:
-            cherrypy.log.error("DEBUG: pycURL trace active", "CURL_FETCH", logging.INFO)
-            self.io_trace = []
-        else:
-            self.io_trace = None
-        multi.add_context(self)
+        self.save_filename = save_filename
+        self.callbacks = callbacks
+        self.failures = 0
+        self.cancelled = False
+        self.curl_fetch = None
 
-    def trace_event(self, str):
-        if self.io_trace is not None:
-            self.io_trace.append((time.time(), str))
-
-    def log_trace(self):
-        for (t, e) in self.io_trace:
-            cherrypy.log.error("Fetch trace %d %f %s" % (self.report_index, t, e), "CURL_FETCH", logging.INFO)
-        self.fifo_sink.log_trace()
+    def start_next_attempt(self):
+        self.fp = open(self.save_filename, "w")
+        ciel.log("Starting fetch attempt %d using %s" % (self.failures + 1, self.urls[self.failures]), "CURL_FETCH", logging.INFO)
+        self.curl_fetch = pycURLFetchContext(self.fp, self.urls[self.failures], self.multi, self.result, self.callbacks.progress)
+        self.curl_fetch.start()
 
     def start(self):
-        self.trace_event("Start")
-        self.start_next_fetch()
+        self.start_next_attempt()
 
-    def get_select_fds(self):
-        # Called from cURL thread
-        read_fds, write_fds, exn_fds = self.fifo_sink.select_fds()
-        ev_rfds, ev_wfds, ev_exfds = self.event_queue.get_select_fds()
-        read_fds.extend(ev_rfds)
-        write_fds.extend(ev_wfds)
-        exn_fds.extend(ev_exfds)
-        return read_fds, write_fds, exn_fds
-
-    def get_timeout(self):
-        # Called from cURL thread
-        return self.dormant_until
-
-    def consider_restart(self):
-        if self.dormant_until is None and not self.requests_paused:
-            cherrypy.log.error("Restart %s fetch" % self.description,
-                               'CURL_FETCH', logging.DEBUG)
-            self.start_next_fetch()
-
-    def fifo_overfull(self):
-        max_fetch = self.fifo_sink.max_allowable_fetch()
-        if max_fetch is None:
-            return False
+    def result(self, success):
+        self.fp.close()
+        if success:
+            self.callbacks.result(True)
         else:
-            return (max_fetch < self.min_fetch_size)
+            self.failures += 1
+            if self.failures == len(self.urls):
+                ciel.log.error('Fetch %s: no more URLs to try.' % self.save_filename, 'BLOCKSTORE', logging.INFO)
+                self.callbacks.result(False)
+            else:
+                ciel.log.error("Fetch %s failed; trying next URL" % (self.urls[self.failures - 1]))
+                self.curl_fetch = None
+                self.callbacks.reset()
+                if not self.cancelled:
+                    self.start_next_attempt()
 
-    def select_callback(self, rd, wr, exn):
-        # Called from cURL thread
-        # Reasons this callback could occur:
-        # 1. The FIFO is writable
-        # 2. It's time to retry a paused request.
-        # 3. An out-of-thread entity has pushed events into our event queue.
-        self.event_queue.dispatch_events()
-        self.fifo_sink.select_callback(rd, wr, exn)
-        if self.requests_paused:
-            if not self.fifo_overfull():
-                self.requests_paused = False
-                self.consider_restart()
-        if self.dormant_until is not None:
-            if datetime.now() > self.dormant_until:
-                self.dormant_until = None
-                self.consider_restart()
+    def set_chunk_size(self, new_chunk_size):
+        # Don't care: we always request the whole file.
+        pass
 
-    def write_data(self, _str):
-        # Called from cURL thread
-        self.trace_event("receiving")
-        self.fifo_sink.write_data(_str)
-        ret = self.sink_fp.write(_str)
-        self.current_start_byte += len(_str)
-        self.have_written_to_process = True
+    def get_filename(self):
+        return self.save_filename
 
-    def start_fetch(self, url, range=None):
-        self.current_fetch = StreamTransferContext.StreamFetchContext(self, url, range)
-        self.multi.add_fetch(self.current_fetch, url, range)
+    def wrote_file(self):
+        return True
+
+    def cancel(self):
+        ciel.log("Fetch %s: cancelling" % self.save_filename, "CURL_FETCH", logging.INFO)
+        self.cancelled = True
+        if self.curl_fetch is not None:
+            self.curl_fetch.cancel()
+        self.fp.close()
+        self.callbacks.result(False)
+
+class StreamTransferContext:
+
+    def __init__(self, ref, block_store, callbacks):
+        self.url = block_store.get_fetch_urls_for_ref(ref)[0]
+        parsed_url = urlparse.urlparse(self.url)
+        self.worker_netloc = parsed_url.netloc
+        self.ref = ref
+        self.save_filename = block_store.fetch_filename(ref.id)
+        self.callbacks = callbacks
+        self.current_data_fetch = None
+        self.previous_fetches_bytes_downloaded = 0
+        self.remote_done = False
+        self.remote_failed = False
+        self.latest_advertisment = 0
+        self.block_store = block_store
+        self.cancelled = False
+        self.current_chunk_size = None
+        self.filename_event = threading.Event()
+        if isinstance(ref, SW2_SocketStreamReference):
+            self.initial_socket_attempt = True
 
     def start_next_fetch(self):
-        fifo_fetch_limit = self.fifo_sink.max_allowable_fetch()
-        if fifo_fetch_limit is None:
-            cherrypy.log.error("Unbounded fetch %s offset %d" %
-                               (self.description, self.current_start_byte))
-            fetch_end = None
-        else:
-            cherrypy.log.error("Bounded fetch %s offset %d length %d" % 
-                               (self.description, self.current_start_byte, fifo_fetch_limit), 'CURL_FETCH', logging.DEBUG)
-            fetch_end = self.current_start_byte + fifo_fetch_limit
-        self.trace_event("Request-sent")
-        self.start_fetch(self.urls[self.failures], (self.current_start_byte, fetch_end))
+        ciel.log("Stream-fetch %s: start fetch from byte %d" % (self.ref.id, self.previous_fetches_bytes_downloaded), "CURL_FETCH", logging.INFO)
+        self.current_data_fetch = pycURLFetchContext(self.fp, self.url, self.block_store.fetch_thread, self.result, self.progress, self.previous_fetches_bytes_downloaded)
+        self.current_data_fetch.start()
 
-    def pause_for(self, secs):
-        assert self.dormant_until is None
-        self.trace_event("Dormant")
-        self.dormant_until = datetime.now() + timedelta(0, secs)
-        cherrypy.log.error("Pausing %s fetch due to producer buffer empty" 
-                           % self.description, 'CURL_FETCH', logging.DEBUG)
-
-    def request_succeeded(self):
-        # Called from cURL thread
-        (req_start, req_end) = self.current_fetch.range
-        if req_end is None:
-            req_bytes = None
-        else:
-            req_bytes = (req_end - req_start) + 1
-        rx_length = self.current_fetch.request_length
-        if req_bytes is None or rx_length is None or req_bytes > rx_length:
-            # Potentially the end
-            if not self.current_fetch.response_had_stream:
-                self.report_completion(True)
-        if not self.has_completed:
-            if not self.fifo_overfull():
-                if rx_length < self.min_fetch_size:
-                    # We're nearly ahead of the producer; pause to give it a chance to buffer more output.
-                    self.pause_for(1)
-                else:
-                    self.start_next_fetch()
-            else:
-                # We should hold off on ordering another chunk until the process has consumed this one
-                # The restart will happen when the buffer drains.
-                cherrypy.log.error("Pausing %s fetch consumer buffer overfull" % self.description, 
-                                   'CURL_FETCH', logging.DEBUG)
-                self.requests_paused = True
-
-    def report_completion(self, succeeded):
-        self.trace_event("EOF")
-        cherrypy.log.error("%s reporting EOF to client" % self.description, "CURL_FETCH", logging.INFO)
-        self.fifo_sink.write_data_eof()
-        self.has_completed = True
-        self.has_succeeded = succeeded
-        self.completion_callback()
-
-    def request_failed(self, errno, errmsg):
-        # Called from cURL thread
-        if errno == 418:
-            if not self.current_fetch.response_had_stream:
-                self.report_completion(True)
-            else:
-                # We've got ahead of the producer.
-                # Pause for 1 seconds.
-                self.pause_for(1)
-
-        else:
-            cherrypy.log.error("Fetch %s failed (error %s)" % 
-                               (self.description, str(errno)), 
-                               "CURL_FETCH", logging.WARNING)
-            if self.have_written_to_process:
-                # Can't just fail-over; we've failed after having written bytes to a process.
-                self.report_completion(False)
-            else:
-                self.failures += 1
-                try:
-                    self.start_fetch(self.urls[self.failures], (0, self.chunk_size))
-                except IndexError:
-                    # Run out of URLs to try
-                    self.report_completion(False)
-
-    def _consumer_attached(self):
-        # Called from cURL thread
-        cherrypy.log.error("Client process for %s attached" % self.description, "CURL_FETCH", logging.INFO)
-        self.fifo_sink.consumer_attached()
-
-    def consumer_attached(self):
-        # Called from arbitrary thread
-        self.event_queue.post_event(self._consumer_attached)
-
-    def _consumer_detached(self):
-        # Called from cURL thread
-        cherrypy.log.error("Client process for %s detached" % self.description, "CURL_FETCH", logging.INFO)
-        self.fifo_sink.consumer_detached()
-        if self.requests_paused and not self.has_completed:
-            self.requests_paused = False
-            self.consider_restart()
-
-    def consumer_detached(self):
-        # Called from arbitrary thread
-        self.event_queue.post_event(self._consumer_detached)
-
-    def _try_again_now(self):
-        # Called from cURL thread
-        if not self.has_completed:
-            cherrypy.log.error("Transfer %s trying again immediately (producer reported done via master)" % self.description, "CURL_FETCH", logging.INFO)
-            if self.dormant_until is not None:
-                self.dormant_until = None
-                self.consider_restart()
-
-    def try_again_now(self):
-        # Called from arbitrary thread
-        self.event_queue.post_event(self._try_again_now)
+    def start(self):
         
-    def cleanup(self):
-        # Called from arbitrary thread, but only after all cURL callbacks have completed
-        cherrypy.log.error('Closing sink file %s for %s (wrote %d bytes, tell = %d, errors = %s)' 
-                           % (self.fifo_name, self.save_id, self.current_start_byte, self.sink_fp.tell(), str(self.sink_fp.errors)), 
-                           'CURL_FETCH', logging.DEBUG)
-        self.sink_fp.flush()
-        self.sink_fp.close()
-        cherrypy.log.error('File now closed (errors = %s)' % self.sink_fp.errors, 'CURL_FETCH', logging.DEBUG)
-        os.unlink(self.fifo_name)
-        os.rmdir(self.fifo_dir)
-        self.multi.remove_context(self)
-        self.event_queue.cleanup()
+        if not self.initial_socket_attempt:
+            self.fp = open(self.save_filename, "w")
+            self.set_filename(self.save_filename)
+            self.start_next_fetch()
+            self.block_store.add_incoming_stream(self.ref.id, self)
+        else:
+            otherend_hostname = self.ref.socket_netloc.split(":")[0]
+            ciel.log("Stream-fetch %s: trying TCP (%s:%s)" % (self.ref.id, otherend_hostname, self.ref.socket_port), "TCP_FETCH", logging.INFO)
+            self.socket_attempt = SocketAttempt(self.ref.id, otherend_hostname, self.ref.socket_port, self.socket_attempt_completed)
+            self.socket_attempt.start()
 
-    def save_result(self, block_store):
-        # Called from arbitrary thread, but only after all cURL callbacks have completed
-        if self.has_completed and self.has_succeeded:
-            block_store.store_file(self.sinkfile_name, self.save_id, True)
+    def progress(self, bytes_downloaded):
+        self.callbacks.progress(self.previous_fetches_bytes_downloaded + bytes_downloaded)
+
+    def consider_next_fetch(self):
+        if self.remote_done or self.latest_advertisment - self.previous_fetches_bytes_downloaded > self.current_chunk_size:
+            self.start_next_fetch()
+        else:
+            ciel.log("Stream-fetch %s: paused (remote has %d, I have %d)" % 
+                     (self.ref.id, self.latest_advertisment, self.previous_fetches_bytes_downloaded), 
+                     "CURL_FETCH", logging.INFO)
+            self.current_data_fetch = None
+
+    def check_complete(self):
+        if self.remote_done and self.latest_advertisment == self.previous_fetches_bytes_downloaded:
+            ciel.log("Stream-fetch %s: complete" % self.ref.id, "CURL_FETCH", logging.INFO)
+            self.complete(True)
+        else:
+            self.consider_next_fetch()
+
+    def result(self, success):
+        # Current transfer finished.
+        if self.remote_failed:
+            ciel.log("Stream-fetch %s: transfer completed, but failure advertised in the meantime" % self.ref.id, "CURL_FETCH", logging.WARNING)
+            self.complete(False)
+            return
+        if not success:
+            ciel.log("Stream-fetch %s: transfer failed" % self.ref.id)
+            self.complete(False)
+        else:
+            this_fetch_bytes = self.current_data_fetch.curl_ctx.getinfo(pycurl.SIZE_DOWNLOAD)
+            ciel.log("Stream-fetch %s: transfer succeeded (got %d bytes)" % (self.ref.id, this_fetch_bytes),
+                     "CURL_FETCH", logging.INFO)
+            self.previous_fetches_bytes_downloaded += this_fetch_bytes
+            self.check_complete()
+
+    def complete(self, success):
+        self.fp.close()
+        self.block_store.remove_incoming_stream(self.ref.id)
+        self.callbacks.result(success)
+
+    def _socket_attempt_completed(self, success, socket):
+        if not success:
+            ciel.log("Stream-fetch %s: TCP transfer failed; falling back to HTTP" % self.ref.id, "CURL_FETCH", logging.INFO)
+            self.initial_socket_attempt = False
+            self.start()
+            self.set_chunk_size(self.current_chunk_size)
+        else:
+            ciel.log("Stream-fetch %s: TCP transfer started" % self.ref.id, "CURL_FETCH", logging.INFO)
+            fifo_name = tempfile.mktemp(prefix="ciel-socket-fifo")
+            os.mkfifo(fifo_name)
+            subprocess.Popen(["cat", ">", fifo_name], shell=True, stdin=socket)
+            self.callbacks.result(True)
+            self.set_filename(fifo_name)
+
+    def socket_attempt_completed(self, success, socket):
+        self.block_store.fetch_thread.do_from_curl_thread(lambda: self._socket_attempt_completed(success, socket))
+
+    def wrote_file(self):
+        return self.initial_socket_attempt
+
+    def subscribe_result(self, success, _):
+        if not success:
+            ciel.log("Stream-fetch %s: failed to subscribe to remote adverts. Abandoning stream." % self.ref.id, "CURL_FETCH", logging.INFO)
+            self.remote_failed = True
+            if self.current_data_fetch is None:
+                self.complete(False)
+
+    def set_chunk_size(self, new_chunk_size):
+        # This is always called at least once per transfer, and so causes the initial advertisment subscription.
+        if new_chunk_size != self.current_chunk_size and not self.initial_socket_attempt:
+            ciel.log("Stream-fetch %s: change notification chunk size to %d" % (self.ref.id, new_chunk_size), "CURL_FETCH", logging.INFO)
+            post_data = simplejson.dumps({"netloc": self.block_store.netloc, "chunk_size": new_chunk_size})
+            self.block_store._post_string_noreturn("http://%s/control/streamstat/%s/subscribe" % (self.worker_netloc, self.ref.id), post_data, result_callback=self.subscribe_result)
+        self.current_chunk_size = new_chunk_size
+
+    def set_filename(self, filename):
+        self.true_filename = filename
+        self.filename_event.set()
+
+    def get_filename(self):
+        self.filename_event.wait()
+        return self.true_filename
+
+    def cancel(self):
+        ciel.log("Stream-fetch %s: cancelling" % self.ref.id, "CURL_FETCH", logging.INFO)
+        self.cancelled = True
+        if not self.initial_socket_attempt:
+            post_data = simplejson.dumps({"netloc": self.block_store.netloc})
+            self.block_store._post_string_noreturn("http://%s/control/streamstat/%s/unsubscribe" % (self.worker_netloc, self.ref.id), post_data)
+            if self.current_data_fetch is not None:
+                self.current_data_fetch.cancel()
+        else:
+            self.socket_attempt.cancel()
+        self.callbacks.result(False)
+
+    def advertisment(self, bytes=None, done=None, absent=None, failed=None):
+        if self.cancelled:
+            return
+        if absent is True or failed is True:
+            if absent is True:
+                ciel.log("Stream-fetch %s: advertisment subscription reported file absent" % self.ref.id, "CURL_FETCH", logging.WARNING)
+            else:
+                ciel.log("Stream-fetch %s: advertisment reported remote production failure" % self.ref.id, "CURL_FETCH", logging.WARNING)
+            self.remote_failed = True
+            if self.current_data_fetch is None:
+                self.complete(False)
+        else:
+            ciel.log("Stream-fetch %s: got advertisment: bytes %d done %s" % (self.ref.id, bytes, done), "CURL_FETCH", logging.INFO)
+            self.latest_advertisment = bytes
+            self.remote_done = done
+            if self.current_data_fetch is None:
+                self.check_complete()
 
 class BlockStore(plugins.SimplePlugin):
 
-    def __init__(self, bus, hostname, port, base_dir, ignore_blocks=False):
+    def __init__(self, bus, hostname, port, base_dir, ignore_blocks=False, aux_listen_port=None):
         plugins.SimplePlugin.__init__(self, bus)
-        self._lock = Lock()
+        self._lock = RLock()
         self.netloc = "%s:%s" % (hostname, port)
         self.base_dir = base_dir
         self.object_cache = {}
         self.bus = bus
-        self.bus.subscribe("stop", self.stop_thread, 10)
         self.fetch_thread = pycURLThread()
-        self.fetch_thread.start()
+        self.dataval_codec = codecs.lookup("string_escape")
+        self.aux_listen_port = aux_listen_port
     
         self.pin_set = set()
     
@@ -896,17 +614,38 @@ class BlockStore(plugins.SimplePlugin):
         # Maintains a set of block IDs that are currently being written.
         # (i.e. They are in the pre-publish/streamable state, and have not been
         #       committed to the block store.)
-        self.streaming_id_set = set()
-    
-        self.current_cache_access_id = 0
-        self.url_cache_filenames = {}
-        self.url_cache_access_times = {}
-        
+        # They map to the executor which is producing them.
+        self.streaming_producers = dict()
+
+        # Remote endpoints that are receiving adverts from our streaming producers.
+        # Indexed by (refid, otherend_netloc)
+        self.remote_stream_subscribers = dict()
+
+        # The other side of the coin: things we're streaming *in*
+        self.incoming_streams = dict()
+
+        # Things we're fetching. The streams dictionary above maps to StreamTransferContexts for advertisment delivery;
+        # this maps to FetchListeners for clients to attach and get progress notifications.
+        self.incoming_fetches = dict()
+
         self.encoders = {'noop': self.encode_noop, 'json': self.encode_json, 'pickle': self.encode_pickle}
         self.decoders = {'noop': self.decode_noop, 'json': self.decode_json, 'pickle': self.decode_pickle, 'handle': self.decode_handle, 'script': self.decode_script}
 
-    def stop_thread(self):
+        global singleton_blockstore
+        assert singleton_blockstore is None
+        singleton_blockstore = self
+
+    def start(self):
+        self.fetch_thread.start()
+        self.fetch_thread.set_aux_listen_port(self.aux_listen_port, self.new_aux_connection)
+        self.file_watcher_thread = get_watcher_thread()
+
+    def stop(self):
         self.fetch_thread.stop()
+
+    def subscribe(self):
+        self.bus.subscribe('start', self.start, 75)
+        self.bus.subscribe('stop', self.stop, 10)
 
     def decode_handle(self, file):
         return file
@@ -924,302 +663,677 @@ class BlockStore(plugins.SimplePlugin):
         return pickle.dump(obj, file)
     def decode_pickle(self, file):
         return pickle.load(file)
-        
-    def mark_url_as_accessed(self, url):
-        self.url_cache_access_times[url] = self.current_cache_access_id
-        self.current_cache_access_id += 1
-        
-    def find_url_in_cache(self, url):
-        with self._lock:
-            try:
-                ret = self.url_cache_filenames[url]
-            except KeyError:
-                return None
-            self.mark_url_as_accessed(url)
-            return ret
-    
-    def evict_lru_from_url_cache(self):
-        lru_url = min([(access_time, url) for (url, access_time) in self.url_cache_access_times.items()])[1]
-        del self.url_cache_filenames[lru_url]
-        del self.url_cache_access_times[lru_url] 
     
     def allocate_new_id(self):
         return str(uuid.uuid1())
     
-    CACHE_SIZE_LIMIT=1024
-    def store_url_in_cache(self, url, filename):
-        with self._lock:
-            if len(self.url_cache_filenames) == BlockStore.CACHE_SIZE_LIMIT:
-                self.evict_lru_from_url_cache()
-            self.url_cache_filenames[url] = filename
-            self.mark_url_as_accessed(url)
-    
-    def maybe_streaming_filename(self, id):
-        with self._lock:
-            if (id in self.streaming_id_set) or (os.path.isfile( self.streaming_filename(id) ) and not os.path.islink( self.streaming_filename(id) )):
-                return True, self.streaming_filename(id)
-            else:
-                return False, self.filename(id)
-    
     def pin_filename(self, id): 
         return os.path.join(self.base_dir, PIN_PREFIX + id)
     
-    def streaming_filename(self, id):
-        return os.path.join(self.base_dir, '.%s' % id)
+    def fetch_filename(self, id):
+        return os.path.join(self.base_dir, '.fetch:%s' % id)
+    
+    def producer_filename(self, id):
+        return os.path.join(self.base_dir, '.producer:%s' % id)
     
     def filename(self, id):
         return os.path.join(self.base_dir, str(id))
+
+    def filename_for_ref(self, ref):
+        if isinstance(ref, SW2_FixedReference):
+            return os.path.join(self.base_dir, '.__fixed__.%s' % ref.id)
+        else:
+            return self.filename(ref.id)
         
-    def store_raw_file(self, incoming_fobj, id):
-        with open(self.filename(id), "wb") as data_file:
-            shutil.copyfileobj(incoming_fobj, data_file)
-            file_size = data_file.tell()
-        return 'swbs://%s/%s' % (self.netloc, str(id)), file_size            
-    
-    def store_object(self, object, encoder, id):
-        """Stores the given object as a block, and returns a swbs URL to it."""
-        #self.object_cache[id] = object
-        with open(self.filename(id), "wb") as object_file:
-            self.encoders[encoder](object, object_file)
-            file_size = object_file.tell()
-        return 'swbs://%s/%s' % (self.netloc, str(id)), file_size
-    
-    def store_file(self, filename, id, can_move=False):
-        """Stores the file with the given local filename as a block, and returns a swbs URL to it."""
-        if can_move:
-            shutil.move(filename, self.filename(id))
-        else:
-            shutil.copyfile(filename, self.filename(id))
-        file_size = os.path.getsize(self.filename(id))
-        return 'swbs://%s/%s' % (self.netloc, str(id)), file_size
+    class RemoteOutputSubscriber:
+        
+        def __init__(self, file_output, netloc, chunk_size):
+            self.file_output = file_output
+            self.netloc = netloc
+            self.chunk_size = chunk_size
+            self.current_size = None
+            self.last_notify = None
 
-    def make_stream_sink(self, id):
-        '''
-        Called when an executor wants its output to be streamable.
-        This method only prepares the block store, and
-        '''
-        with self._lock:
-            self.streaming_id_set.add(id)
-            filename = self.streaming_filename(id)
-            open(filename, 'wb').close()
-            return filename
+        def set_chunk_size(self, chunk_size):
+            self.chunk_size = chunk_size
+            if self.current_size is not None:
+                self.post(simplejson.dumps({"bytes": self.current_size, "done": False}))
+            self.file_output.chunk_size_changed(self)
 
-    def prepublish_file(self, filename, id):
-        '''
-        Called when an executor wants its output to be streamable.
-        This method only prepares the block store, and
-        '''
-        cherrypy.log.error('Prepublishing file %s for output %s' % (filename, id), 'BLOCKSTORE', logging.INFO)
+        def unsubscribe(self):
+            self.file_output.unsubscribe(self)
+
+        def post(self, message):
+            post_string_noreturn("http://%s/control/streamstat/%s/advert" % (self.netloc, self.file_output.refid), message)
+
+        def progress(self, bytes):
+            self.current_size = bytes
+            if self.last_notify is None or self.current_size - self.last_notify > self.chunk_size:
+                data = simplejson.dumps({"bytes": bytes, "done": False})
+                self.post(data)
+                self.last_notify = self.current_size
+
+        def result(self, success):
+            if success:
+                self.post(simplejson.dumps({"bytes": self.current_size, "done": True}))
+            else:
+                self.post(simplejson.dumps({"failed": True}))
+
+        
+    class FileOutputContext:
+
+        def __init__(self, refid, block_store, subscribe_callback, may_pipe):
+            self.refid = refid
+            self.block_store = block_store
+            self.subscribe_callback = subscribe_callback
+            self.file_watch = None
+            self.subscriptions = []
+            self.current_size = None
+            self.closed = False
+            self.may_pipe = may_pipe
+            if self.may_pipe:
+                self.fifo_name = tempfile.mktemp()
+                os.mkfifo(self.fifo_name)
+                self.pipe_deadline = datetime.now() + timedelta(seconds=5)
+                self.started = False
+                self.pipe_attached = False
+                self.cond = threading.Condition(self.block_store._lock)
+
+        def get_filename(self):
+            if self.may_pipe:
+                with self.block_store._lock:
+                    if not self.pipe_attached:
+                        now = datetime.now()
+                        if now < self.pipe_deadline:
+                            wait_time = self.pipe_deadline - now
+                            wait_secs = float(wait_time.seconds) + (float(wait_time.microseconds) / 10**6)
+                            ciel.log("Producer for %s: waiting for pipe pickup" % self.refid, "BLOCKPIPE", logging.INFO)
+                            self.cond.wait(wait_secs)
+                    self.started = True
+                    if self.pipe_attached:
+                        ciel.log("Producer for %s: using pipe" % self.refid, "BLOCKPIPE", logging.INFO)
+                        return self.fifo_name
+                    else:
+                        ciel.log("Producer for %s: no consumer picked up, using conventional stream-file" % self.refid, "BLOCKPIPE", logging.INFO)
+            return self.block_store.producer_filename(self.refid)
+
+        def get_stream_ref(self):
+            if self.block_store.aux_listen_port is not None and self.may_pipe:
+                return SW2_SocketStreamReference(self.refid, self.block_store.netloc, self.block_store.aux_listen_port)
+            else:
+                return SW2_StreamReference(self.refid, [self.block_store.netloc])
+
+        def rollback(self):
+            if not self.closed:
+                self.closed = True
+                self.block_store.rollback_file(self.refid)
+                if self.file_watch is not None:
+                    self.file_watch.cancel()
+                for subscriber in self.subscriptions:
+                    subscriber.result(False)
+
+        def close(self):
+            if not self.closed:
+                self.closed = True
+                self.block_store.commit_stream(self.refid)
+                # At this point no subscribe() calls are in progress.
+                if self.file_watch is not None:
+                    self.file_watch.cancel()
+                self.current_size = os.stat(self.block_store.filename(self.refid)).st_size
+                for subscriber in self.subscriptions:
+                    subscriber.progress(self.current_size)
+                    subscriber.result(True)
+
+        def get_completed_ref(self):
+            if not self.closed:
+                raise Exception("FileOutputContext for ref %s must be closed before it is realised as a concrete reference" % self.refid)
+            if self.may_pipe and self.pipe_attached:
+                return SW2_CompletedReference(self.refid)
+            completed_file = self.block_store.filename(self.refid)
+            if self.current_size < 1024:
+                with open(completed_file, "r") as fp:
+                    return SWDataValue(self.refid, self.block_store.encode_datavalue(fp.read()))
+            else:
+                return SW2_ConcreteReference(self.refid, size_hint=self.current_size, location_hints=[self.block_store.netloc])
+
+        def update_chunk_size(self):
+            self.subscriptions.sort(key=lambda x: x.chunk_size)
+            self.file_watch.set_chunk_size(self.subscriptions[0].chunk_size)
+
+        def try_get_pipe(self):
+            if not self.may_pipe:
+                return None
+            else:
+                with self.block_store._lock:
+                    if self.started:
+                        ciel.log("Consumer for %s: production already started, not using pipe" % self.refid, "BLOCKPIPE", logging.INFO)
+                        return None
+                    ciel.log("Consumer for %s: attached to local pipe" % self.refid, "BLOCKPIPE", logging.INFO)
+                    self.pipe_attached = True
+                    self.cond.notify_all()
+                    return self.fifo_name
+
+        def subscribe(self, new_subscriber):
+
+            with self.block_store._lock:
+                if self.pipe_attached:
+                    raise Exception("Tried to subscribe to output %s, but it's already being consumed through a pipe! Bug? Or duplicate consumer task?" % self.refid)
+                self.started = True
+                self.cond.notify_all()
+            should_start_watch = False
+            self.subscriptions.append(new_subscriber)
+            if self.current_size is not None:
+                new_subscriber.progress(self.current_size)
+            if self.file_watch is None:
+                ciel.log("Starting watch on output %s" % self.refid, "BLOCKSTORE", logging.INFO)
+                self.file_watch = self.subscribe_callback(self)
+                should_start_watch = True
+            self.update_chunk_size()
+            if should_start_watch:
+                self.file_watch.start()
+
+        def unsubscribe(self, subscriber):
+            try:
+                self.subscriptions.remove(subscriber)
+            except ValueError:
+                ciel.log("Couldn't unsubscribe %s from output %s: not a subscriber" % (subscriber, self.refid), "BLOCKSTORE", logging.ERROR)
+            if len(self.subscriptions) == 0 and self.file_watch is not None:
+                ciel.log("No more subscribers for %s; cancelling watch" % self.refid, "BLOCKSTORE", logging.INFO)
+                self.file_watch.cancel()
+                self.file_watch = None
+            else:
+                self.update_chunk_size()
+
+        def chunk_size_changed(self, subscriber):
+            self.update_chunk_size()
+
+        def size_update(self, new_size):
+            self.current_size = new_size
+            for subscriber in self.subscriptions:
+                subscriber.progress(new_size)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exnt, exnv, exntb):
+            if not self.closed:
+                if exnt is None:
+                    self.close()
+                else:
+                    ciel.log("FileOutputContext %s destroyed due to exception %s: rolling back" % (self.refid, repr(exnv)), "BLOCKSTORE", logging.WARNING)
+                    self.rollback()
+            return False
+
+    def register_local_output(self, id, new_producer):
         with self._lock:
-            self.streaming_id_set.add(id)
-            os.symlink(filename, self.streaming_filename(id))
-                   
-    def commit_file(self, filename, id, can_move=False):
-        cherrypy.log.error('Committing streamed file %s for output %s' % (filename, id), 'BLOCKSTORE', logging.INFO)
-        if can_move:
-            # Moving the file under the lock should be cheap.
-            # N.B. We need to protect all operations because the streaming
-            #      filename will be unlinked.
-            with self._lock:
-                url, file_size = self.store_file(filename, id, True)
-                self.streaming_id_set.remove(id)
-                os.unlink(self.streaming_filename(id))
-                os.symlink(self.filename(id), self.streaming_filename(id))
-        else:
-            # A copy will be necessary, so do this outside the lock.
-            url, file_size = self.store_file(filename, id, False)
-            with self._lock:
-                self.streaming_id_set.remove(id)
-                os.unlink(self.streaming_filename(id))
-                os.symlink(self.filename(id), self.streaming_filename(id))
-            
-        return url, file_size
+            self.streaming_producers[id] = new_producer
+            dot_filename = self.producer_filename(id)
+            open(dot_filename, 'wb').close()
+            return
+
+    def make_local_output(self, id, subscribe_callback=None, may_pipe=False):
+        '''
+        Creates a file-in-progress in the block store directory.
+        '''
+        if subscribe_callback is None:
+            subscribe_callback = self.create_file_watch
+        ciel.log.error('Creating file for output %s' % id, 'BLOCKSTORE', logging.INFO)
+        new_ctx = BlockStore.FileOutputContext(id, self, subscribe_callback, may_pipe)
+        self.register_local_output(id, new_ctx)
+        return new_ctx
+
+    def create_file_watch(self, output_ctx):
+        return self.file_watcher_thread.create_watch(output_ctx)
+
+    def commit_file(self, old_name, new_name):
+
+        try:
+            os.link(old_name, new_name)
+        except OSError as e:
+            if e.errno == 17: # File exists
+                size_old = os.path.getsize(old_name)
+                size_new = os.path.getsize(new_name)
+                if size_stream == size_conc:
+                    ciel.log('Produced/retrieved %s matching existing file (size %d): ignoring' % (new_name, size_new), 'BLOCKSTORE', logging.WARNING)
+                else:
+                    ciel.log('Produced/retrieved %s with size not matching existing block (old: %d, new %d)' % (new_name, old_size, new_size), 'BLOCKSTORE', logging.ERROR)
+                    raise
+            else:
+                raise
+
+    def commit_stream(self, id):
+        ciel.log.error('Committing file for output %s' % id, 'BLOCKSTORE', logging.INFO)
+        with self._lock:
+            del self.streaming_producers[id]
+            self.commit_file(self.producer_filename(id), self.filename(id))
 
     def rollback_file(self, id):
-        cherrypy.log.error('Rolling back streamed file for output %s' % id, 'BLOCKSTORE', logging.WARNING)
+        ciel.log.error('Rolling back streamed file for output %s' % id, 'BLOCKSTORE', logging.WARNING)
         with self._lock:
-            self.streaming_id_set.remove(id)
-            os.unlink(self.streaming_filename(id))
-    
-    def try_retrieve_filename_for_ref_without_transfer(self, ref):
-        assert isinstance(ref, SWRealReference)
+            del self.streaming_producers[id]
 
-        def find_first_cached(urls):
-            for url in urls:
-                filename = self.find_url_in_cache(url)
-                if filename is not None:
-                    return filename
-            return None
+    def new_aux_connection(self, new_sock):
+        try:
+            new_sock.setblocking(True)
+            sock_file = new_sock.makefile("r")
+            output_id = sock_file.readline().strip()
+            sock_file.close()
+            with self._lock:
+                try:
+                    producer = self.streaming_producers[output_id]
+                except KeyError:
+                    ciel.log("Got auxiliary TCP connection for bad output %s" % output_id, "BLOCKSOCKET", logging.WARNING)
+                    new_sock.sendall("FAIL\n")
+                    new_sock.close()
+                fifo_name = producer.try_get_pipe()
+                if fifo_name is None:
+                    ciel.log("Auxiliary TCP connection for output %s rejected: couldn't get FIFO" % output_id, "BLOCKSOCKET", logging.WARNING)
+                    new_sock.sendall("FAIL\n")
+                    new_sock.close()
+                else:
+                    new_sock.sendall("GO\n")
+                    ciel.log("Auxiliary TCP connection for output %s attached; starting 'cat'" % output_id, "BLOCKSOCKET", logging.INFO)
+                    subprocess.Popen(["cat", "<", fifo_name], shell=True, stdout=new_sock)
+        except Exception as e:
+            ciel.log("Error handling auxiliary TCP connection: %s" % repr(e), "BLOCKSOCKET", logging.ERROR)
+            try:
+                new_sock.close()
+            except:
+                pass
+
+    def write_fixed_ref_string(self, string, fixed_ref):
+        with open(self.filename_for_ref(fixed_ref), "w") as fp:
+            fp.write(string)
+
+    def ref_from_string(self, string, id):
+        output_ctx = self.make_local_output(id)
+        with open(output_ctx.get_filename(), "w") as fp:
+            fp.write(string)
+        output_ctx.close()
+        return output_ctx.get_completed_ref()
+
+    def cache_object(self, object, encoder, id):
+        self.object_cache[(id, encoder)] = object        
+
+    def ref_from_object(self, object, encoder, id):
+        """Encodes an object, returning either a DataValue or ConcreteReference as appropriate"""
+        self.cache_object(object, encoder, id)
+        buffer = StringIO()
+        self.encoders[encoder](object, buffer)
+        ret = self.ref_from_string(buffer.getvalue(), id)
+        buffer.close()
+        return ret
+
+    # Why not just rename to self.filename(id) and skip this nonsense? Because os.rename() can be non-atomic.
+    # When it renames between filesystems it does a full copy; therefore I copy/rename to a colocated dot-file,
+    # then complete the job by linking the proper name in output_ctx.close().
+    def ref_from_external_file(self, filename, id):
+        output_ctx = self.make_local_output(id)
+        with output_ctx:
+            shutil.move(filename, output_ctx.get_filename())
+        return output_ctx.get_completed_ref()
+
+    # Remote is subscribing to updates from one of our streaming producers
+    def subscribe_to_stream(self, otherend_netloc, chunk_size, id):
+        post = None
+        with self._lock:
+            try:
+                producer = self.streaming_producers[id]
+                try:
+                    self.remote_stream_subscribers[(id, otherend_netloc)].set_chunk_size(chunk_size)
+                    ciel.log("Remote %s changed chunk size for %s to %d" % (otherend_netloc, id, chunk_size), "BLOCKSTORE", logging.INFO)
+                except KeyError:
+                    new_subscriber = BlockStore.RemoteOutputSubscriber(producer, otherend_netloc, chunk_size)
+                    producer.subscribe(new_subscriber)
+                    ciel.log("Remote %s subscribed to output %s (chunk size %d)" % (otherend_netloc, id, chunk_size), "BLOCKSTORE", logging.INFO)
+            except KeyError:
+                try:
+                    st = os.stat(self.filename(id))
+                    post = simplejson.dumps({"bytes": st.st_size, "done": True})
+                except OSError:
+                    post = simplejson.dumps({"absent": True})
+            except Exception as e:
+                ciel.log("Subscription to %s failed with exception %s; reporting absent" % (id, e), "BLOCKSTORE", logging.WARNING)
+                post = simplejson.dumps({"absent": True})
+        if post is not None:
+            self.post_string_noreturn("http://%s/control/streamstat/%s/advert" % (otherend_netloc, id), post)
+
+    def unsubscribe_from_stream(self, otherend_netloc, id):
+        with self._lock:
+            try:
+                self.remote_stream_subscribers[(id, otherend_netloc)].cancel()
+                ciel.log("%s unsubscribed from %s" % (otherend_netloc, id), "BLOCKSTORE", logging.INFO)
+            except KeyError:
+                ciel.log("Ignored unsubscribe request for unknown block %s" % id, "BLOCKSTORE", logging.WARNING)
+
+    def encode_datavalue(self, str):
+        return (self.dataval_codec.encode(str))[0]
+
+    def decode_datavalue(self, ref):
+        return (self.dataval_codec.decode(ref.value))[0]
+
+    # Called from cURL thread
+    def add_incoming_stream(self, id, transfer_ctx):
+        self.incoming_streams[id] = transfer_ctx
+
+    # Called from cURL thread
+    def remove_incoming_stream(self, id):
+        del self.incoming_streams[id]
+
+    # Called from cURL thread
+    def _receive_stream_advertisment(self, id, **args):
+        try:
+            self.incoming_streams[id].advertisment(**args)
+        except KeyError:
+            ciel.log("Got advertisment for %s which is not an ongoing stream" % id, "BLOCKSTORE", logging.WARNING)
+            pass
+
+    def receive_stream_advertisment(self, id, **args):
+        self.fetch_thread.do_from_curl_thread(lambda: self._receive_stream_advertisment(id, **args))
+        
+    def is_ref_local(self, ref):
+        assert isinstance(ref, SWRealReference)
 
         if isinstance(ref, SWErrorReference):
             raise RuntimeSkywritingError()
-        elif isinstance(ref, SWDataValue):
-            id = ref.id
-            with open(self.filename(id), 'w') as obj_file:
-                self.encode_json(ref.value, obj_file)
-            return self.filename(id)
-        elif isinstance(ref, SW2_ConcreteReference) or isinstance(ref, SW2_StreamReference):
-            maybe_local_filename = self.filename(ref.id)
-            if os.path.exists(maybe_local_filename):
-                return maybe_local_filename
-            check_urls = ["swbs://%s/%s" % (loc_hint, str(ref.id)) for loc_hint in ref.location_hints]
-            return find_first_cached(check_urls)
-        elif isinstance(ref, SWURLReference):
-            for url in ref.urls:
-                parsed_url = urlparse.urlparse(url)
-                if parsed_url.scheme == "file":
-                    return parsed_url.path
-            return find_first_cached(ref.urls)
 
-    def try_retrieve_object_for_ref_without_transfer(self, ref, decoder):
+        if isinstance(ref, SW2_FixedReference):
+            assert ref.fixed_netloc == self.netloc
+            
+        with self._lock:
+            if os.path.exists(self.filename_for_ref(ref)):
+                return True
+            if isinstance(ref, SWDataValue):
+                with open(self.filename_for_ref(ref), 'w') as obj_file:
+                    obj_file.write(self.decode_datavalue(ref))
+                return True
 
-        # Basically like the same task for files, but with the possibility of cached decoded forms
+        return False
+
+    class DummyFetchListener:
+
+        def __init__(self, filename):
+            self.filename = filename
+
+        def get_filename(self):
+            return self.filename
+
+        def get_completed_ref(self, is_sweetheart):
+            return None
+
+        def unsubscribe(self, l):
+            pass
+
+    class FetchListener:
+        
+        def __init__(self, ref, block_store):
+            self.listeners = []
+            self.last_progress = 0
+            self.ref = ref
+            self.block_store = block_store
+            self.chunk_size = None
+            self.completed = False
+
+        def set_fetch_context(self, fetch_context):
+            self.fetch_context = fetch_context
+
+        def progress(self, bytes):
+            for l in self.listeners:
+                l.progress(bytes)
+            self.last_progress = bytes
+
+        def result(self, success):
+            self.completed = True
+            self.block_store.fetch_completed(self.ref, success and self.fetch_context.wrote_file())
+            for l in self.listeners:
+                l.result(success)
+
+        def reset(self):
+            for l in self.listeners:
+                l.reset()
+
+        def update_chunk_size(self):
+            interested_listeners = filter(lambda x: x.chunk_size is not None, self.listeners)
+            if len(interested_listeners) != 0:
+                interested_listeners.sort(key=lambda x: x.chunk_size)
+                self.fetch_context.set_chunk_size(interested_listeners[0].chunk_size)
+
+        def _unsubscribe(self, fetch_client):
+            if self.completed:
+                ciel.log("Removing fetch client %s: transfer had already completed" % fetch_client, "CURL_FETCH", logging.WARNING)
+                return
+            self.listeners.remove(fetch_client)
+            self.update_chunk_size()
+            fetch_client.result(False)
+            if len(self.listeners) == 0:
+                ciel.log("Removing fetch client %s: no clients remain, cancelling transfer" % fetch_client, "CURL_FETCH", logging.INFO)
+                self.fetch_context.cancel()
+
+        def unsubscribe(self, fetch_client):
+            # Asynchronous out-of-thread callback: might come from the cURL thread or any other.
+            self.block_store.fetch_thread.do_from_curl_thread(lambda: self._unsubscribe(fetch_client))
+
+        def add_listener(self, fetch_client):
+            self.listeners.append(fetch_client)
+            fetch_client.progress(self.last_progress)
+            self.update_chunk_size()
+
+        def get_filename(self):
+            return self.fetch_context.get_filename()
+
+        def get_completed_ref(self, is_sweetheart):
+            if not self.fetch_context.wrote_file():
+                return SW2_CompletedReference(self.ref.id)
+            else:
+                if is_sweetheart:
+                    return SW2_SweetheartReference(self.ref.id, self.last_progress, self.block_store.netloc, [self.block_store.netloc])
+                else:
+                    return SW2_ConcreteReference(self.ref.id, self.last_progress, [self.block_store.netloc])
+
+        def get_stream_ref(self):
+            raise Exception("Stream-refs from fetches don't work right now")
+        #return SW2_StreamReference(self.ref.id, [self.block_store.netloc])
+
+    # Called from cURL thread
+    def _start_fetch_ref(self, ref):
+            
+        urls = self.get_fetch_urls_for_ref(ref)
+        save_filename = self.fetch_filename(ref.id)
+        new_listener = BlockStore.FetchListener(ref, self)
         if isinstance(ref, SW2_ConcreteReference):
-            for loc in ref.location_hints:
-                if loc == self.netloc:
-                    try:
-                        return self.object_cache[ref.id]
-                    except:
-                        pass
-        cached_file = self.try_retrieve_filename_for_ref_without_transfer(ref)
-        if cached_file is not None:
-            with open(cached_file, "r") as f:
-                return self.decoders[decoder](f)
-        return None
+            ctx = FileTransferContext(urls, save_filename, self.fetch_thread, new_listener)
+        elif isinstance(ref, SW2_StreamReference):
+            ctx = StreamTransferContext(ref, self, new_listener)
+        else:
+            ciel.log('Cannot fetch reference type: %s' % repr(ref), 'BLOCKSTORE', logging.INFO)
+            raise Exception("Can't start-fetch reference %s: not a concrete or a stream" % ref)
+        new_listener.set_fetch_context(ctx)
+        self.incoming_fetches[ref.id] = new_listener
+        ctx.start()
+
+    # Called from cURL thread
+    def fetch_completed(self, ref, success):
+        with self._lock:
+            self.commit_file(self.fetch_filename(ref.id), self.filename(ref.id))
+            del self.incoming_fetches[ref.id]
+
+    def try_local_fetch(self, ref, fetch_client):
+
+        with self._lock:
+            if ref.id in self.streaming_producers:
+                ciel.log("Ref %s is being produced locally! Joining..." % ref, "BLOCKSTORE", logging.INFO)
+                producer = self.streaming_producers[ref.id]
+                pipe_name = producer.try_get_pipe()
+                if pipe_name is not None:
+                    ciel.log("Ref %s: attached to direct pipe!" % ref, "BLOCKSTORE", logging.INFO)
+                    dummy_listener = BlockStore.DummyFetchListener(pipe_name)
+                    fetch_client.set_producer(dummy_listener)
+                    fetch_client.result_callback(True)
+                else:
+                    producer.subscribe(fetch_client)
+                    fetch_client.set_producer(self.streaming_producers[ref.id], supply_refs=False)
+                return True                
+            elif self.is_ref_local(ref):
+                ciel.log("Ref %s already local; no fetch required" % ref, "BLOCKSTORE", logging.INFO)
+                dummy_listener = BlockStore.DummyFetchListener(self.filename_for_ref(ref))
+                fetch_client.set_producer(dummy_listener)
+                fetch_client.result_callback(True)
+                return True
+            else:
+                return False
+
+    # Called from cURL thread
+    def _fetch_ref_async(self, ref, fetch_client):
+
+        with self._lock:
+            if self.try_local_fetch(ref, fetch_client):
+                ciel.log("Ref %s became locally available during thread-switch" % ref, "BLOCKSTORE", logging.INFO)
+                return
+            if ref.id not in self.incoming_fetches:
+                ciel.log("Starting new fetch for ref %s" % ref, "BLOCKSTORE", logging.INFO)
+                self._start_fetch_ref(ref)
+            else:
+                ciel.log("Joining existing fetch for ref %s" % ref, "BLOCKSTORE", logging.INFO)
+            fetch_client.set_producer(self.incoming_fetches[ref.id])
+            self.incoming_fetches[ref.id].add_listener(fetch_client)
+
+    class FetchProxy:
+
+        def __init__(self, ref, result_callback, reset_callback, progress_callback, chunk_size):
+            self.ready_event = threading.Event()
+            self.result_callback = result_callback
+            self.reset_callback = reset_callback
+            self.progress_callback = progress_callback
+            self.chunk_size = chunk_size
+            self.ref = ref
+            self.producer = None
+
+        def result(self, success):
+            self.result_callback(success)
+
+        def reset(self):
+            self.reset_callback()
+
+        def progress(self, bytes):
+            if self.progress_callback is not None:
+                self.progress_callback(bytes)
+
+        def set_producer(self, producer, supply_refs=True):
+            self.supply_refs = supply_refs
+            self.producer = producer
+            self.ready_event.set()
+            
+        def get_filename(self):
+            self.ready_event.wait()
+            return self.producer.get_filename()
+
+        def get_completed_ref(self, is_sweetheart):
+            self.ready_event.wait()
+            if self.supply_refs:
+                return self.producer.get_completed_ref(is_sweetheart)
+            else:
+                return None
+
+        def cancel(self):
+            self.ready_event.wait()
+            self.producer.unsubscribe(self)
+
+    # Called from arbitrary thread
+    def fetch_ref_async(self, ref, result_callback, reset_callback, progress_callback=None, chunk_size=67108864):
+
+        new_client = BlockStore.FetchProxy(ref, result_callback, reset_callback, progress_callback, chunk_size)
+        with self._lock:
+            if not self.try_local_fetch(ref, new_client):
+                self.fetch_thread.do_from_curl_thread(lambda: self._fetch_ref_async(ref, new_client))
+        return new_client
+
+    class SynchronousTransfer:
+        
+        def __init__(self, ref):
+            self.ref = ref
+            self.finished_event = threading.Event()
+
+        def result(self, success):
+            self.success = success
+            self.finished_event.set()
+
+        def reset(self):
+            pass
+
+        def wait(self):
+            self.finished_event.wait()
+
+    def retrieve_filenames_for_refs(self, refs):
+        
+        ctxs = []
+        for ref in refs:
+            sync_transfer = BlockStore.SynchronousTransfer(ref)
+            ciel.log("Synchronous fetch ref %s" % ref, "BLOCKSTORE", logging.INFO)
+            transfer_ctx = self.fetch_ref_async(ref, sync_transfer.result, sync_transfer.reset)
+            ctxs.append(sync_transfer)
+            
+        for ctx in ctxs:
+            ctx.wait()
+            
+        failed_transfers = filter(lambda x: not x.success, ctxs)
+        if len(failed_transfers) > 0:
+            raise MissingInputException(dict([(ctx.ref.id, SW2_TombstoneReference(ctx.ref.id, ctx.ref.location_hints)) for ctx in failed_transfers]))
+        return [self.filename_for_ref(ref) for ref in refs]
+
+    def retrieve_filename_for_ref(self, ref):
+
+        return self.retrieve_filenames_for_refs([ref])[0]
+
+    def retrieve_strings_for_refs(self, refs):
+
+        strs = []
+        files = self.retrieve_filenames_for_refs(refs)
+        for fname in files:
+            with open(fname, "r") as fp:
+                strs.append(fp.read())
+        return strs
+
+    def retrieve_string_for_ref(self, ref):
+        
+        return self.retrieve_strings_for_refs([ref])[0]
+
+    def retrieve_objects_for_refs(self, ref_and_decoders):
+
+        solutions = dict()
+        unsolved_refs = []
+        for (ref, decoder) in ref_and_decoders:
+            try:
+                solutions[ref.id] = self.object_cache[(ref.id, decoder)]
+            except:
+                unsolved_refs.append(ref)
+
+        strings = self.retrieve_strings_for_refs(unsolved_refs)
+        str_of_ref = dict([(ref.id, string) for (string, ref) in zip(strings, unsolved_refs)])
+            
+        for (ref, decoder) in ref_and_decoders:
+            if ref.id not in solutions:
+                decoded = self.decoders[decoder](StringIO(str_of_ref[ref.id]))
+                self.object_cache[(ref.id, decoder)] = decoded
+                solutions[ref.id] = decoded
+            
+        return [solutions[ref.id] for (ref, decoder) in ref_and_decoders]
+
+    def retrieve_object_for_ref(self, ref, decoder):
+        
+        return self.retrieve_objects_for_refs([(ref, decoder)])[0]
 
     def get_fetch_urls_for_ref(self, ref):
 
-        if isinstance(ref, SW2_ConcreteReference) or isinstance(ref, SW2_StreamReference):
+        if isinstance(ref, SW2_ConcreteReference):
             return ["http://%s/data/%s" % (loc_hint, ref.id) for loc_hint in ref.location_hints]
-        elif isinstance(ref, SWURLReference):
-            return map(sw_to_external_url, ref.urls)
+        elif isinstance(ref, SW2_StreamReference):
+            return ["http://%s/data/.%s" % (loc_hint, ref.id) for loc_hint in ref.location_hints]
+        elif isinstance(ref, SW2_FixedReference):
+            assert ref.fixed_netloc == self.netloc
+            return ["http://%s/data/%s" % (self.netloc, ref.id)]
         elif isinstance(ref, SW2_FetchReference):
             return [ref.url]
                 
-    def retrieve_filenames_for_refs_eager(self, refs):
-
-        fetch_ctx = WaitableTransferGroup()
-
-        # Step 1: Resolve from local cache
-        resolved_refs = map(self.try_retrieve_filename_for_ref_without_transfer, refs)
-
-        # Step 2: Build request descriptors
-        def create_transfer_context(ref):
-            urls = self.get_fetch_urls_for_ref(ref)
-            if isinstance(ref, SW2_ConcreteReference) or isinstance(ref, SW2_StreamReference) or isinstance(ref, SW2_FetchReference):
-                save_id = ref.id
-            else:
-                save_id = self.allocate_new_id()
-            new_ctx = FileTransferContext(urls, save_id, self.fetch_thread, fetch_ctx.transfer_completed_callback)
-            new_ctx.start()
-            return new_ctx
-
-        request_list = []
-        for (ref, resolution) in zip(refs, resolved_refs):
-            if resolution is None:
-                request_list.append(create_transfer_context(ref))
-
-        fetch_ctx.wait_for_transfers(len(request_list))
-
-        for req in request_list:
-            req.save_result(self)
-
-        failure_bindings = {}
-        for req in request_list:
-            if not req.has_succeeded:
-                failure_bindings[req.ref.id] = SW2_TombstoneReference(req.ref.id, req.ref.location_hints)
-        if len(failure_bindings) > 0:
-            raise MissingInputException(failure_bindings)
-
-        result_list = []
- 
-        for resolution in resolved_refs:
-            if resolution is None:
-                next_req = request_list.pop(0)
-                next_req.cleanup()
-                result_list.append(self.filename(next_req.save_id))
-            else:
-                result_list.append(resolution)
-
-        return result_list
-
-    def retrieve_filenames_for_refs(self, refs, do_io_trace=False):
-
-        fetch_ctx = StreamTransferGroup()
-
-        # Step 1: Resolve from local cache
-        resolved_refs = map(self.try_retrieve_filename_for_ref_without_transfer, refs)
-
-        # Step 2: Build request descriptors
-        def create_transfer_context(ref, i):
-            urls = self.get_fetch_urls_for_ref(ref)
-            if isinstance(ref, SW2_ConcreteReference) or isinstance(ref, SW2_StreamReference):
-                save_id = ref.id
-            else:
-                save_id = self.allocate_new_id()
-            ret = StreamTransferContext(ref, urls, save_id, self.fetch_thread, 
-                                        fetch_ctx.transfer_completed_callback, i, do_io_trace)
-            fetch_ctx.add_handle(ret)
-            ret.start()
-            return ret
-
-        result_list = []
- 
-        for (i, (ref, resolution)) in enumerate(zip(refs, resolved_refs)):
-            if resolution is None:
-                ctx = create_transfer_context(ref, i)
-                result_list.append(ctx.fifo_name)
-            else:
-                result_list.append(resolution)
-
-        return (result_list, fetch_ctx)
-
-    def retrieve_objects_for_refs(self, refs, decoder):
-        
-        easy_solutions = [self.try_retrieve_object_for_ref_without_transfer(ref, decoder) for ref in refs]
-        fetch_urls = [self.get_fetch_urls_for_ref(ref) for ref in refs]
-
-        result_list = []
-        request_list = []
-        
-        transfer_ctx = WaitableTransferGroup()
-
-        for (solution, this_fetch_urls, ref) in zip(easy_solutions, fetch_urls, refs):
-            if solution is not None:
-                result_list.append(solution)
-            else:
-                result_list.append(None)
-                new_ctx = BufferTransferContext(this_fetch_urls, 
-                                                self.fetch_thread, 
-                                                transfer_ctx.transfer_completed_callback)
-                new_ctx.start()
-                request_list.append((ref, new_ctx))
-
-        transfer_ctx.wait_for_transfers(len(request_list))
-
-        failure_bindings = {}
-        j = 0
-        for i, res in enumerate(result_list):
-            if res is None:
-                ref, next_object = request_list[j]
-                j += 1
-                if next_object.has_succeeded:
-                    next_object.buffer.seek(0)
-                    result_list[i] = self.decoders[decoder](next_object.buffer)
-                else:
-                    failure_bindings[ref.id] = SW2_TombstoneReference(ref.id, ref.location_hints)
-
-        for _, req in request_list:
-            req.cleanup()
-        
-        if len(failure_bindings) > 0:
-            raise MissingInputException(failure_bindings)
-        else:
-            return result_list
-
-    def retrieve_object_for_ref(self, ref, decoder):
-        return self.retrieve_objects_for_refs([ref], decoder)[0]
-        
     def get_ref_for_url(self, url, version, task_id):
         """
         Returns a SW2_ConcreteReference for the data stored at the given URL.
@@ -1255,11 +1369,8 @@ class BlockStore(plugins.SimplePlugin):
             # 3. Store the fetched file in the block store, named by the
             #    content hash.
             id = 'urlfetch:%s' % hash.hexdigest()
-            _, size = self.store_file(fetch_filename, id, True)
-            
-            ref = SW2_ConcreteReference(id, size)
-            ref.add_location_hint(self.netloc)
-        
+            ref = self.ref_from_external_file(fetch_filename, id)
+
         return ref
         
     def choose_best_netloc(self, netlocs):
@@ -1277,25 +1388,96 @@ class BlockStore(plugins.SimplePlugin):
                 if parsed_url.netloc == self.netloc:
                     return url
             return random.choice(urls)
+
+    class BufferTransferContext:
         
+        def __init__(self, method, url, postdata, fetch_thread, result_callback=None):
+
+            self.response_buffer = StringIO()
+            self.completed_event = threading.Event()
+            self.result_callback = result_callback
+            self.url = url
+            self.curl_ctx = pycURLBufferContext(method, postdata, self.response_buffer, url, fetch_thread, self.result)
+
+        def start(self):
+
+            self.curl_ctx.start()
+
+        def get_result(self):
+
+            self.completed_event.wait()
+            if self.success:
+                return self.response_string
+            else:
+                raise Exception("Curl-post failed. Possible error-document: %s" % self.response_string)
+
+        def result(self, success):
+            
+            self.response_string = self.response_buffer.getvalue()
+            self.success = success
+            self.response_buffer.close()
+            self.completed_event.set()
+            if self.result_callback is not None:
+                self.result_callback(success, self.url)
+
+    # This is only a BlockStore method because it uses the fetch_thread.
+    # Called from cURL thread
+    def _post_string_noreturn(self, url, postdata, result_callback=None):
+        ctx = BlockStore.BufferTransferContext("POST", url, postdata, self.fetch_thread, result_callback)
+        ctx.start()
+        return
+
+    def post_string_noreturn(self, url, postdata, result_callback=None):
+        self.fetch_thread.do_from_curl_thread(lambda: self._post_string_noreturn(url, postdata, result_callback))
+
+    # Called from cURL thread
+    def _post_string(self, url, postdata):
+        ctx = BlockStore.BufferTransferContext("POST", url, postdata, self.fetch_thread)
+        ctx.start()
+        return ctx
+
+    def post_string(self, url, postdata):
+        ctx = self.fetch_thread.do_from_curl_thread_sync(lambda: self._post_string(url, postdata))
+        return ctx.get_result()
+
+    def _get_string(self, url):
+        ctx = BlockStore.BufferTransferContext("GET", url, "", self.fetch_thread)
+        ctx.start()
+        return ctx
+
+    def get_string(self, url):
+        ctx = self.fetch_thread.do_from_curl_thread_sync(lambda: self._get_string(url))
+        return ctx.get_result()
+
+    def check_local_blocks(self):
+        ciel.log("Looking for local blocks", "BLOCKSTORE", logging.INFO)
+        try:
+            for block_name in os.listdir(self.base_dir):
+                if block_name.startswith('.'):
+                    if not os.path.exists(os.path.join(self.base_dir, block_name[1:])):
+                        ciel.log("Deleting incomplete block %s" % block_name, "BLOCKSTORE", logging.WARNING)
+                        os.remove(os.path.join(self.base_dir, block_name))
+        except OSError as e:
+            ciel.log("Couldn't enumerate existing blocks: %s" % e, "BLOCKSTORE", logging.WARNING)
+
     def block_list_generator(self):
-        cherrypy.log.error('Generating block list for local consumption', 'BLOCKSTORE', logging.INFO)
+        ciel.log.error('Generating block list for local consumption', 'BLOCKSTORE', logging.INFO)
         for block_name in os.listdir(self.base_dir):
             if not block_name.startswith('.'):
                 block_size = os.path.getsize(os.path.join(self.base_dir, block_name))
                 yield block_name, block_size
     
     def build_pin_set(self):
-        cherrypy.log.error('Building pin set', 'BLOCKSTORE', logging.INFO)
+        ciel.log.error('Building pin set', 'BLOCKSTORE', logging.INFO)
         initial_size = len(self.pin_set)
         for filename in os.listdir(self.base_dir):
             if filename.startswith(PIN_PREFIX):
                 self.pin_set.add(filename[len(PIN_PREFIX):])
-                cherrypy.log.error('Pinning block %s' % filename[len(PIN_PREFIX):], 'BLOCKSTORE', logging.INFO)
-        cherrypy.log.error('Pinned %d new blocks' % (len(self.pin_set) - initial_size), 'BLOCKSTORE', logging.INFO)
+                ciel.log.error('Pinning block %s' % filename[len(PIN_PREFIX):], 'BLOCKSTORE', logging.INFO)
+        ciel.log.error('Pinned %d new blocks' % (len(self.pin_set) - initial_size), 'BLOCKSTORE', logging.INFO)
     
     def generate_block_list_file(self):
-        cherrypy.log.error('Generating block list file', 'BLOCKSTORE', logging.INFO)
+        ciel.log.error('Generating block list file', 'BLOCKSTORE', logging.INFO)
         with tempfile.NamedTemporaryFile('w', delete=False) as block_list_file:
             filename = block_list_file.name
             for block_name, block_size in self.block_list_generator():
@@ -1311,10 +1493,10 @@ class BlockStore(plugins.SimplePlugin):
     def pin_ref_id(self, id):
         open(self.pin_filename(id), 'w').close()
         self.pin_set.add(id)
-        cherrypy.log.error('Pinned block %s' % id, 'BLOCKSTORE', logging.INFO)
+        ciel.log.error('Pinned block %s' % id, 'BLOCKSTORE', logging.INFO)
         
     def flush_unpinned_blocks(self, really=True):
-        cherrypy.log.error('Flushing unpinned blocks', 'BLOCKSTORE', logging.INFO)
+        ciel.log.error('Flushing unpinned blocks', 'BLOCKSTORE', logging.INFO)
         files_kept = 0
         files_removed = 0
         for block_name in os.listdir(self.base_dir):
@@ -1325,10 +1507,20 @@ class BlockStore(plugins.SimplePlugin):
             elif not block_name.startswith(PIN_PREFIX):
                 files_kept += 1
         if really:
-            cherrypy.log.error('Flushed block store, kept %d blocks, removed %d blocks' % (files_kept, files_removed), 'BLOCKSTORE', logging.INFO)
+            ciel.log.error('Flushed block store, kept %d blocks, removed %d blocks' % (files_kept, files_removed), 'BLOCKSTORE', logging.INFO)
         else:
-            cherrypy.log.error('If we flushed block store, would keep %d blocks, remove %d blocks' % (files_kept, files_removed), 'BLOCKSTORE', logging.INFO)
+            ciel.log.error('If we flushed block store, would keep %d blocks, remove %d blocks' % (files_kept, files_removed), 'BLOCKSTORE', logging.INFO)
         return (files_kept, files_removed)
 
     def is_empty(self):
         return self.ignore_blocks or len(os.listdir(self.base_dir)) == 0
+
+def get_string(url):
+    return singleton_blockstore.get_string(url)
+
+def post_string(url, content):
+    return singleton_blockstore.post_string(url, content)
+
+def post_string_noreturn(url, content, result_callback=None):
+    singleton_blockstore.post_string_noreturn(url, content, result_callback=None)
+    
