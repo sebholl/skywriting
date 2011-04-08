@@ -57,7 +57,7 @@ int sw_spawntask( const char *const new_task_id,
     curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
     #endif
 
-    asprintf( &post_url, "http://%s/task/%s/spawn", sw_get_master_loc(), (char *)parent_task_id );
+    ASPRINTF_ORDIE( sw_spawntask(), &post_url, "http://%s/task/%s/spawn", sw_get_master_loc(), (char *)parent_task_id );
     curl_easy_setopt( handle, CURLOPT_URL, post_url );
     free( post_url );
 
@@ -138,7 +138,7 @@ int sw_publish_ref( const char *const master_loc, const char *const task_id, con
     chunk = curl_slist_append( chunk, "Content-Type: identity" );
     curl_easy_setopt( handle, CURLOPT_HTTPHEADER, chunk );
 
-    asprintf( &post_url, "http://%s/task/%s/publish/", master_loc, task_id );
+    ASPRINTF_ORDIE( sw_publish_ref(), &post_url, "http://%s/task/%s/publish/", master_loc, task_id );
     curl_easy_setopt( handle, CURLOPT_URL, post_url );
     free( post_url );
 
@@ -174,9 +174,12 @@ static char *_sw_get_filename( const char *const id ){
 
     char *result, *envname;
 
-    asprintf( &envname, "CL_PATH_%s", id );
-    result = getenv( envname );
-    free( envname );
+    if( asprintf( &envname, "CL_PATH_%s", id ) != -1 ){
+        result = getenv( envname );
+        free( envname );
+    } else {
+        result = NULL;
+    }
 
     return ( result != NULL ) ? strdup( result ) : NULL;
 
@@ -207,91 +210,6 @@ int sw_open_fd_for_id( const char *id ){
     return result;
 
 }
-
-char *sw_dump_id( const char *const id, size_t *const size_out ){
-
-    char *result = NULL;
-
-    int fd = sw_open_fd_for_id( id );
-
-    #if VERBOSE
-    printf("sw_dump_id(): attempting to dump fd (%d) for id (%s)\n", fd, id );
-    #endif
-
-    if( fd >= 0 ){
-
-        long len;
-        struct stat info;
-
-        fstat( fd, &info);
-        len = info.st_size;
-
-        if( S_ISREG(info.st_mode) ){
-
-            if( (result = malloc(len)) != NULL ){
-
-                if(read(fd, result, len)==len){
-
-                    #if VERBOSE
-                    printf( "--> Read %ld bytes directly from block store file\n", len );
-                    #endif
-
-                    if( size_out != NULL ) *size_out = (size_t)len;
-
-                } else {
-
-                    #if VERBOSE
-                    printf( "--> Fail when attempting to read %ld bytes from block store\n", len );
-                    #endif
-
-                    free( result );
-                    result = NULL;
-
-                }
-
-            }
-
-        } else if ( S_ISFIFO(info.st_mode) ) {
-
-            #if VERBOSE
-            printf( "--> Reading from a FIFO (named pipe)\n" );
-            #endif
-
-            struct MemoryStruct mem = { NULL, 0, 0 };
-            void *buffer = malloc(4096);
-            size_t tmp;
-
-            while( (tmp = read( fd, buffer, 4096 )) ){
-                #if VERBOSE
-                printf( "--> Read %d byte(s) from FIFO...\n", (int)tmp );
-                #endif
-                WriteMemoryCallback( buffer, 1, tmp, &mem );
-            }
-
-            free( buffer );
-
-            result = mem.memory;
-            if( size_out != NULL) *size_out = mem.size;
-
-        } else {
-
-            fprintf( stderr, "ERROR: Unexpected file type (st_mode: %d) whilst attempting to dump ID (%s)\n", (int)info.st_mode, id );
-            exit( EXIT_FAILURE );
-
-        }
-
-        close( fd );
-
-    }
-
-    #if VERBOSE
-    printf("::: ID content result: %p\n", result );
-    #endif
-
-    return result;
-
-}
-
 
 
 swref *sw_move_file_to_store( const char *const worker_url, const char *const filepath, const char *const id ){
@@ -409,34 +327,34 @@ char *sw_generate_suffixed_id( const char *const task_id, const char *const suff
 
     char *result;
 
-    asprintf( &result, "%s:%s", task_id, suffix );
+    ASPRINTF_ORNULL( &result, "%s:%s", task_id, suffix );
 
     return result;
 
 }
 
 
-inline int sw_set_current_task_id( const char *const taskid ){
+int sw_set_current_task_id( const char *const taskid ){
     return ( setenv( "CL_TASK_ID", taskid, 1 ) == 0 );
 }
 
-inline const char* sw_get_current_task_id( void ){
+const char* sw_get_current_task_id( void ){
     return getenv( "CL_TASK_ID" );
 }
 
-inline const char* sw_get_current_worker_loc( void ){
+const char* sw_get_current_worker_loc( void ){
     return getenv( "CL_WORKER_LOC" );
 }
 
-inline const char* sw_get_current_output_id( void ){
+const char* sw_get_current_output_id( void ){
     return getenv( "CL_OUTPUT_ID" );
 }
 
-inline const char* sw_get_master_loc( void ){
+const char* sw_get_master_loc( void ){
     return getenv( "CL_MASTER_LOC" );
 }
 
-inline const char* sw_get_block_store_path( void ){
+const char* sw_get_block_store_path( void ){
     return getenv( "CL_BLOCK_STORE" );
 }
 

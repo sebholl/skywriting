@@ -50,9 +50,9 @@ cielID *cldptr_heap_cielID( void ){
 
 }
 
-static int _cldptr_heapalloc( size_t size ){
+static size_t _cldptr_heapalloc( size_t size ){
 
-    int offset = 0;
+    size_t offset = 0;
     cldptr_header *header_ptr;
 
     while( offset < _heapoffset ){

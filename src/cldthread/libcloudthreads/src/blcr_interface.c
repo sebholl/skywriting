@@ -20,7 +20,7 @@ static int BLCR_CRSCOPE = CR_SCOPE_PROC; /* See blcr_common.h */
 static int checkpoint_count = 0;
 static enum blcr_state blcr_checkpoint_status = blcr_error;
 
-static int blcr_callback(void *arg);
+static int blcr_callback();
 
 /* API */
 
@@ -112,7 +112,8 @@ char *blcr_generate_context_filename(void)
 
     if ( (p = getcwd(NULL, 0)) == NULL) return NULL;
 
-    asprintf( &context_filename, "%s/context.%d.%d", p, getpid(), checkpoint_count );
+    if( asprintf( &context_filename, "%s/context.%d.%d", p, getpid(), checkpoint_count ) == -1 )
+        context_filename = NULL;
 
     free(p);
 
@@ -122,7 +123,7 @@ char *blcr_generate_context_filename(void)
 
 /* Helper Functions */
 
-static int blcr_callback(void *arg)
+static int blcr_callback()
 {
     int ret;
 

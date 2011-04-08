@@ -15,7 +15,7 @@ RANLIB = ranlib
 WINDRES = windres
 
 INC = -I../libcloudthreads/src
-CFLAGS = -Wall -std=gnu99
+CFLAGS = -O3 -Wall -std=gnu99
 RESINC = 
 RCFLAGS = 
 LIBDIR =

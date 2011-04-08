@@ -19,7 +19,7 @@ clean:
 	$(MAKE) clean -f libcloudthreads.cbp.mak
 	rmdir 'bin'
 	rm -f -r 'doc'
-	rm *.layout *.depend
+	rm -f *.layout *.depend
 	
 
 .PHONY: all release debug clean

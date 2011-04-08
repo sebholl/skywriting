@@ -1,2 +1,0 @@
-for f in *.cbp; do cbp2make -in $f; done
-

@@ -82,7 +82,7 @@ int main( int argc, char *argv[] ) {
 
             png_t pngInfo;
 
-            png_open_write( &pngInfo, 0, fdopen( cldthread_open_result_as_stream(), "ab" ) );
+            png_open_write( &pngInfo, 0, fdopen( cldthread_stream_result(), "ab" ) );
 
             png_set_data( &pngInfo, countx * input->tWidth, county * input->tHeight, 8, PNG_TRUECOLOR_ALPHA, big_data );
 
@@ -132,10 +132,6 @@ cldvalue *Mandelbrot_Tile_Generator( void *arg ) {
 
     const mtginput *input = ( const mtginput * )arg;
 
-    png_t pngInfo;
-
-    png_open_write( &pngInfo, 0, fdopen( cldthread_open_result_as_stream(), "ab" ) );
-
     unsigned int *data = calloc( input->tWidth * input->tHeight, sizeof( int ) );
 
     int const maxit = input->maxit;
@@ -157,6 +153,10 @@ cldvalue *Mandelbrot_Tile_Generator( void *arg ) {
                                   maxit );
         }
     }
+
+    png_t pngInfo;
+
+    png_open_write( &pngInfo, 0, fdopen( cldthread_stream_result(), "ab" ) );
 
     png_set_data( &pngInfo, input->tWidth, input->tHeight, 8, PNG_TRUECOLOR_ALPHA, ( unsigned char * )data );
 

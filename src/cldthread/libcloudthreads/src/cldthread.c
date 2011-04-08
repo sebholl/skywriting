@@ -17,11 +17,7 @@ int cldthread_init( void ){
 
     if( sw_init() && blcr_init_framework() ){
 
-        cielID *id = cielID_create( sw_get_current_task_id() );
-
-        _ciel_set_task_id( id );
-
-        cielID_free( id );
+        _ciel_set_task_id( cielID_create( sw_get_current_task_id() ) );
 
         return 1;
 
@@ -69,8 +65,6 @@ cldthread *cldthread_smart_create( char *const group_id, cldvalue *(*const fptr)
 
     }
 
-    cielID_free( thread_task_id );
-
     return thread_output_id;
 
 }
@@ -92,7 +86,7 @@ cldthread *cldthread_posix_create( void *(*fptr)(void *), void *arg ){
 }
 
 
-int cldthread_open_result_as_stream( void ){
+int cldthread_stream_result( void ){
 
     if( _outputstream == NULL ) {
 

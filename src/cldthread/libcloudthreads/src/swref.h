@@ -64,3 +64,13 @@ char *                   swref_to_data   ( const swref *ref, size_t *size_out );
 
 swref *                  swref_at_id( cielID *id );
 cielID *                 cielID_of_swref( const swref *ref );
+
+#define ASPRINTF_ORNULL( checkpoint, args... ) if( asprintf( checkpoint, args ) == -1 ) *checkpoint = NULL
+#define ASPRINTF_ORDIE( function_name, checkpoint, args... ) \
+    if( asprintf( checkpoint, args ) == -1 ) { \
+        perror( #function_name ": could not allocate string.\n" ); \
+        exit( EXIT_FAILURE ); \
+    } \
+
+
+

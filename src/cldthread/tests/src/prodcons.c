@@ -44,7 +44,7 @@ int main(int argc, char *argv[])
 
 cldvalue *CloudProducer(void *_arg){
 
-    int fd = cldthread_open_result_as_stream();
+    int fd = cldthread_stream_result();
 
     dup2( fd, 1 );
 
