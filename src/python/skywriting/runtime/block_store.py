@@ -32,6 +32,7 @@ import threading
 import codecs
 from datetime import datetime, timedelta
 import time
+import subprocess
 from cStringIO import StringIO
 from errno import EAGAIN, EPIPE
 from cherrypy.process import plugins
@@ -893,10 +894,10 @@ class BlockStore(plugins.SimplePlugin):
             if e.errno == 17: # File exists
                 size_old = os.path.getsize(old_name)
                 size_new = os.path.getsize(new_name)
-                if size_stream == size_conc:
+                if size_old == size_new:
                     ciel.log('Produced/retrieved %s matching existing file (size %d): ignoring' % (new_name, size_new), 'BLOCKSTORE', logging.WARNING)
                 else:
-                    ciel.log('Produced/retrieved %s with size not matching existing block (old: %d, new %d)' % (new_name, old_size, new_size), 'BLOCKSTORE', logging.ERROR)
+                    ciel.log('Produced/retrieved %s with size not matching existing block (old: %d, new %d)' % (new_name, size_old, size_new), 'BLOCKSTORE', logging.ERROR)
                     raise
             else:
                 raise

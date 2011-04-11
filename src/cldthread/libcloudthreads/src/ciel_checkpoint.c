@@ -49,7 +49,7 @@ static void _ciel_update_env( cielID *const new_task_id, cielID *input_id[], siz
 
     _ciel_set_task_id( new_task_id );
 
-    ASPRINTF_ORNULL( &path, "/tmp/%s", sw_get_current_task_id() );
+    ASPRINTF_ORNULL( &path, "/tmp/%s:comm", sw_get_current_task_id() );
     ASPRINTF_ORNULL( &path2, "/tmp/%s:sync", sw_get_current_task_id() );
 
     if( (path != NULL) && (path2 != NULL) ){
@@ -115,17 +115,33 @@ int _ciel_spawn_chkpt_task( cielID *new_task_id, cielID *output_task_id,
 
         cJSON *jsonenc_args;
         cJSON *jsonenc_dpnds;
+        cJSON *jsonenc_private;
 
         swref *chkpt_ref;
         swref *args_ref;
 
         char *tmp;
 
-        jsonenc_args = cJSON_CreateObject();
+        #ifdef DEBUG
+        printf( "_ciel_spawn_chkpt_task(): spawning checkpoint task\n" );
+        #endif
 
         chkpt_ref = sw_move_file_to_store( NULL, path, NULL );
-        cJSON_AddItemToObject( jsonenc_args, "checkpoint", swref_serialize( chkpt_ref ) );
+
+
+        cJSON *tmpJSON = cJSON_CreateObject();
+        cJSON_AddItemToObject( tmpJSON, "checkpoint", swref_serialize( chkpt_ref ) );
         swref_free( chkpt_ref );
+
+        tmp = cJSON_PrintUnformatted( tmpJSON );
+        cJSON_Delete( tmpJSON );
+
+        args_ref = sw_save_string_to_store( NULL, NULL, tmp );
+        free( tmp );
+
+        jsonenc_args = cJSON_CreateObject();
+        cJSON_AddItemToObject( jsonenc_args, "simple_exec_args", swref_serialize(args_ref) );
+        swref_free( args_ref );
 
         tmp = cJSON_PrintUnformatted( jsonenc_args );
         cJSON_Delete( jsonenc_args );
@@ -134,18 +150,17 @@ int _ciel_spawn_chkpt_task( cielID *new_task_id, cielID *output_task_id,
         free( tmp );
 
 
-        jsonenc_dpnds = cJSON_CreateObject();
-
-        cJSON_AddItemToObject( jsonenc_dpnds, "_args", swref_serialize( args_ref ) );
+        jsonenc_private = swref_serialize( args_ref );
         swref_free( args_ref );
+
+        jsonenc_dpnds = cJSON_CreateObject();
 
         swref *ref;
         size_t i;
 
         for(i = 0; i < input_count; i++ ){
-            ASPRINTF_ORDIE( _ciel_spawn_chkpt_task(), &tmp, "input%d", i );
             ref = swref_create( FUTURE, input_id[i]->id_str, NULL, 0, NULL );
-            cJSON_AddItemToObject( jsonenc_dpnds, tmp, swref_serialize( ref) );
+            cJSON_AddItemToArray( jsonenc_dpnds, swref_serialize( ref) );
             swref_free( ref );
             free(tmp);
         }
@@ -156,6 +171,7 @@ int _ciel_spawn_chkpt_task( cielID *new_task_id, cielID *output_task_id,
                                sw_get_current_task_id(),
                                "cldthread",
                                jsonenc_dpnds,
+                               jsonenc_private,
                                is_continuation );
 
         cJSON_Delete( jsonenc_dpnds );

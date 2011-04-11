@@ -2,7 +2,9 @@
 
 #include "swref.h"
 
-#define VERBOSE 0
+#ifdef DEBUG
+    #define VERBOSE 1
+#endif
 
 /* Initialization */
 
@@ -16,6 +18,7 @@ int sw_spawntask( const char *new_task_id,
                   const char *parent_task_id,
                   const char *handler,
                   cJSON *jsonenc_dependencies,
+                  cJSON *jsonenc_private,
                   int const is_continuation );
 
 
@@ -37,11 +40,15 @@ int sw_open_fd_for_id( const char *id );
 
 const char *sw_get_current_task_id( void );
 
+const char *sw_get_current_job_id( void );
+
 const char *sw_get_current_output_id( void );
 
-const char* sw_get_master_loc( void );
+const char *sw_get_current_output_filename( void );
 
-const char* sw_get_current_worker_loc( void );
+const char *sw_get_master_loc( void );
+
+const char *sw_get_current_worker_loc( void );
 
 const char *sw_get_block_store_path( void );
 
@@ -66,5 +73,7 @@ cJSON *sw_create_json_task_descriptor( const char *new_task_id,
                                        const char *current_task_id,
                                        const char *handler,
                                        cJSON *jsonenc_dependencies,
-                                       int const is_continuation );
+                                       cJSON *jsonenc_private,
+                                       int const is_continuation,
+                                       const char *job_id );
 

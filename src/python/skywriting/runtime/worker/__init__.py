@@ -74,14 +74,9 @@ class Worker(plugins.SimplePlugin):
         self.upload_deferred_work = DeferredWorkPlugin(bus, 'upload_work')
         self.upload_deferred_work.subscribe()
         self.upload_manager = UploadManager(self.block_store, self.upload_deferred_work)
-		
+        
         self.execution_features = ExecutionFeatures()
-		self.execution_features.register_executor('cloudapp', CloudAppExecutor)
-        self.execution_features.register_executor('cldthread', None )
-		
-        #self.execution_record_types = {'swi': SWInterpreterTaskExecutionRecord,
-        #                              'cldthread': CloudThreadTaskExecutionRecord }
-
+        
         #self.task_executor = TaskExecutorPlugin(bus, self, self.master_proxy, self.execution_features, 1)
         #self.task_executor.subscribe()
         

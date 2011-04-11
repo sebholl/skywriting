@@ -32,6 +32,7 @@ int sw_spawntask( const char *const new_task_id,
                   const char *const parent_task_id,
                   const char *const handler,
                   cJSON *const jsonenc_dependencies,
+                  cJSON *const jsonenc_private,
                   int const is_continuation ){
 
     struct MemoryStruct postdata;
@@ -57,7 +58,7 @@ int sw_spawntask( const char *const new_task_id,
     curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 );
     #endif
 
-    ASPRINTF_ORDIE( sw_spawntask(), &post_url, "http://%s/task/%s/spawn", sw_get_master_loc(), (char *)parent_task_id );
+    ASPRINTF_ORDIE( sw_spawntask(), &post_url, "http://%s/control/task/", sw_get_current_worker_loc() );
     curl_easy_setopt( handle, CURLOPT_URL, post_url );
     free( post_url );
 
@@ -66,13 +67,20 @@ int sw_spawntask( const char *const new_task_id,
                                                 parent_task_id,
                                                 handler,
                                                 jsonenc_dependencies,
-                                                is_continuation );
+                                                jsonenc_private,
+                                                is_continuation,
+                                                sw_get_current_job_id() );
 
+    /*
     task_desc_list = cJSON_CreateArray();
     cJSON_AddItemToArray( task_desc_list, task_desc );
+    */
 
-    post_payload = cJSON_PrintUnformatted( task_desc_list );
-    cJSON_Delete( task_desc_list );
+    post_payload = cJSON_PrintUnformatted( task_desc );
+    cJSON_Delete( task_desc );
+
+    printf( "HELLLOOOO!!!!>>>>>>>>>>>>>>>>>>>>>><<\n\n\n%s\n\n\n", post_payload );
+    fflush(stdout);
 
     curl_easy_setopt( handle, CURLOPT_POST, 1 );
     curl_easy_setopt( handle, CURLOPT_READFUNCTION, &ReadMemoryCallback );
@@ -342,12 +350,20 @@ const char* sw_get_current_task_id( void ){
     return getenv( "CL_TASK_ID" );
 }
 
+const char* sw_get_current_job_id( void ){
+    return getenv( "CL_JOB_ID" );
+}
+
 const char* sw_get_current_worker_loc( void ){
     return getenv( "CL_WORKER_LOC" );
 }
 
 const char* sw_get_current_output_id( void ){
     return getenv( "CL_OUTPUT_ID" );
+}
+
+const char* sw_get_current_output_filename( void ){
+    return getenv( "CL_OUTPUT_FILE" );
 }
 
 const char* sw_get_master_loc( void ){
@@ -364,13 +380,23 @@ cJSON *sw_create_json_task_descriptor( const char *const new_task_id,
                                        const char *const current_task_id,
                                        const char *const handler,
                                        cJSON *const jsonenc_dependencies,
-                                       int const is_continuation ){
+                                       cJSON *const jsonenc_private,
+                                       int const is_continuation,
+                                       const char *const job_id ){
 
     cJSON *result = cJSON_CreateObject();
 
     cJSON_AddStringToObject( result, "task_id", new_task_id );
+    cJSON_AddStringToObject( result, "job", job_id );
     cJSON_AddStringToObject( result, "handler", handler );
+
+    cJSON_AddStringToObject( result, "scheduling_class", "disk" );
+
     cJSON_AddItemReferenceToObject( result, "dependencies", jsonenc_dependencies );
+    cJSON_AddItemReferenceToObject( result, "inputs", jsonenc_dependencies );
+
+    cJSON_AddItemReferenceToObject( result, "task_private", jsonenc_private );
+
     cJSON_AddItemToObject( result, "expected_outputs", cJSON_CreateStringArray( (const char **)&output_task_id, 1 ) );
     cJSON_AddStringToObject( result, (is_continuation ? "continues_task" : "parent" ), current_task_id );
 

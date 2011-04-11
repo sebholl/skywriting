@@ -56,6 +56,10 @@ int blcr_checkpoint( const char *filepath ){
     cr_checkpoint_args_t args;
     cr_checkpoint_handle_t hndl;
 
+    #ifdef DEBUG
+    printf( "blcr_checkpoint(): checkpointing process\n" );
+    #endif
+
     cr_initialize_checkpoint_args_t( &args );
 
 	args.cr_flags |= BLCR_CRFLAGS;
@@ -65,6 +69,10 @@ int blcr_checkpoint( const char *filepath ){
     args.cr_fd = open( filepath, O_WRONLY | O_CREAT | O_TRUNC , 0600);
 
     blcr_checkpoint_status = blcr_error;
+
+    #ifdef DEBUG
+    printf( "blcr_checkpoint(): requesting checkpoint to \"%s\"\n", filepath );
+    #endif
 
     /* Flush any data waiting in STDOUT or STDERR because
      * we don't really want 2 copies after checkpoint. */
@@ -84,6 +92,7 @@ int blcr_checkpoint( const char *filepath ){
         case blcr_error:
             /* Do nothing, but silences missing case compiler warning.
              * Instead, all errors will be detected below.             */
+            result = -1;
             break;
     }
 
@@ -97,9 +106,9 @@ int blcr_checkpoint( const char *filepath ){
         }
     }
 
-    /*
-    printf("Checkpointed with return value: %d (errorno: %d).\n", blcr_checkpoint_status, errno );
-    */
+    #ifdef DEBUG
+    printf("blcr_checkpoint(): checkpointed with return value: %d (errorno: %d).\n", blcr_checkpoint_status, errno );
+    #endif
 
     return ( (result==0) && (blcr_checkpoint_status!=blcr_error) );
 

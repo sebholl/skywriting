@@ -52,7 +52,7 @@ static void _cldthread_submit_output( cldvalue *const value ){
 
         swref_free( data );
 
-        sw_save_string_to_store( NULL, sw_get_current_output_id(), tmp );
+        sw_save_string_to_store( NULL, sw_get_current_output_filename(), tmp );
 
         free( tmp );
 

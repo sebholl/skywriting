@@ -28,13 +28,12 @@ import time
 
 class TaskExecutorPlugin(AsynchronousExecutePlugin):
     
-    def __init__(self, bus, worker, master_proxy, execution_features, execution_task_record_types, num_threads=1):
+    def __init__(self, bus, worker, master_proxy, execution_features, num_threads=1):
         AsynchronousExecutePlugin.__init__(self, bus, num_threads, "execute_task")
         self.worker = worker
         self.block_store = worker.block_store
         self.master_proxy = master_proxy
         self.execution_features = execution_features
-		self.execution_task_record_types = execution_task_record_types
         self.current_task_set = None
         self._lock = Lock()
     

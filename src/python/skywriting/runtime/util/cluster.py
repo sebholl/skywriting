@@ -59,7 +59,7 @@ def main():
     if options.send_env:
         swi_args["start_env"] = dict(os.environ)
 
-    new_job = skywriting.runtime.util.start_job.submit_job_with_package(swi_package, "swi", swi_args, os.getcwd(), master_uri)
+    new_job = skywriting.runtime.util.start_job.submit_job_with_package(swi_package, "swi", swi_args, {}, os.getcwd(), master_uri, args[1:])
     
     result = skywriting.runtime.util.start_job.await_job(new_job["job_id"], master_uri)
     

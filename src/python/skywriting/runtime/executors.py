@@ -24,7 +24,6 @@ from skywriting.runtime.exceptions import FeatureUnavailableException,\
 from shared.skypy_spawn import SkyPySpawn
 
 import hashlib
-import urlparse
 import simplejson
 import logging
 import shutil
@@ -32,9 +31,9 @@ import subprocess
 import tempfile
 import os.path
 import threading
+import simplejson
 import pickle
 import time
-import codecs
 from subprocess import PIPE
 from datetime import datetime
 from skywriting.runtime.block_store import STREAM_RETRY, json_decode_object_hook
@@ -42,12 +41,6 @@ from errno import EPIPE
 
 import ciel
 import struct
-
-try:
-    from shared.generated.ciel.protoc_pb2 import Task
-    from shared.generated.java2.protoc_pb2 import Java2TaskPrivate
-except:
-    pass
 
 running_children = {}
 
@@ -82,14 +75,11 @@ class ExecutionFeatures:
         self.executors = dict([(x.handler_name, x) for x in [SkywritingExecutor, SkyPyExecutor, SWStdinoutExecutor, 
                                                            EnvironmentExecutor, JavaExecutor, DotNetExecutor, 
                                                            CExecutor, GrabURLExecutor, SyncExecutor, InitExecutor,
-                                                           Java2Executor, ProcExecutor]])
+                                                           Java2Executor, ProcExecutor, CloudAppExecutor, CloudThreadExecutor]])
         self.runnable_executors = dict([(x, self.executors[x]) for x in self.check_executors()])
 
     def all_features(self):
         return self.executors.keys()
-
-    def register_executor(self, name, executor):
-        self.executors[name] = executor
 
     def check_executors(self):
         ciel.log.error("Checking executors:", "EXEC", logging.INFO)
@@ -262,7 +252,7 @@ class FileOrString:
 
 class BaseExecutor:
     
-    TASK_PRIVATE_ENCODING = 'pickle'
+    TASK_PRIVATE_ENCODING = 'json'
     
     def __init__(self, worker):
         self.worker = worker
@@ -771,7 +761,7 @@ class ProcExecutor(BaseExecutor):
 
         task_private_id = ("%s:_private" % task_descriptor["task_id"])        
         task_private_ref = SW2_FixedReference(task_private_id, block_store.netloc)
-        block_store.write_fixed_ref_string(pickle.dumps(task_descriptor["task_private"]), task_private_ref)
+        block_store.write_fixed_ref_string(simplejson.dumps(task_descriptor["task_private"], cls=SWReferenceJSONEncoder), task_private_ref)
         parent_task_record.publish_ref(task_private_ref)
         
         task_descriptor["task_private"] = task_private_ref
@@ -1399,7 +1389,7 @@ class SimpleExecutor(BaseExecutor):
 
         # Add the args dict
         args_name = "%ssimple_exec_args" % name_prefix
-        args_ref = block_store.ref_from_object(args, "pickle", args_name)
+        args_ref = block_store.ref_from_object(args, "json", args_name)
         parent_task_record.publish_ref(args_ref)
         task_descriptor["dependencies"].append(args_ref)
         task_descriptor["task_private"]["simple_exec_args"] = args_ref
@@ -1442,7 +1432,7 @@ class SimpleExecutor(BaseExecutor):
         self.output_ids = task_descriptor["expected_outputs"]
         self.output_refs = [None for i in range(len(self.output_ids))]
         self.succeeded = False
-        self.args = self.block_store.retrieve_object_for_ref(task_private["simple_exec_args"], "pickle")
+        self.args = self.block_store.retrieve_object_for_ref(task_private["simple_exec_args"], "json")
 
         try:
             self.debug_opts = self.args['debug_options']
@@ -1723,9 +1713,9 @@ class ProcessRunningExecutor(SimpleExecutor):
                 #        if "trace_io" in self.debug_opts:
                 #            transfer_ctx.log_traces()
 
-				if rc != 0:
-            		cherrypy.log.error( "Process terminated with non-zero return code (%s)." % rc, "EXEC", logging.ERROR )
-            		raise OSError()
+                if rc != 0:
+                    ciel.log.error( "Process terminated with non-zero return code (%s)." % rc, "EXEC", logging.ERROR )
+                    raise OSError()
 
         for i, output in enumerate(out_file_contexts):
             self.output_refs[i] = output.get_completed_ref()
@@ -1745,6 +1735,8 @@ class ProcessRunningExecutor(SimpleExecutor):
     def _abort(self):
         if self.proc is not None:
             self.proc.kill()
+
+from skywriting.runtime.cldthread import CloudAppExecutor, CloudThreadExecutor
 
 class SWStdinoutExecutor(ProcessRunningExecutor):
     
@@ -2126,7 +2118,7 @@ def build_init_descriptor(handler, args, package_ref, master_uri, ref_of_string)
                          "start_handler": handler, 
                          "start_args": args
                          } 
-    task_private_ref = ref_of_string(pickle.dumps(task_private_dict), master_uri)
+    task_private_ref = ref_of_string(simplejson.dumps(task_private_dict, cls=SWReferenceJSONEncoder), master_uri)
     return {"handler": "init", 
             "dependencies": [package_ref, task_private_ref], 
             "task_private": task_private_ref

@@ -246,6 +246,7 @@ int cielID_finalize_stream( cielID *id ){
 
 size_t cielID_read_streams( cielID *id[], size_t const count ){
 
+    int tmpfd;
     size_t i;
 
     for( i = 0; i < count; i++ ){
@@ -254,13 +255,19 @@ size_t cielID_read_streams( cielID *id[], size_t const count ){
         printf("cielID_read_streams(): attempting to open stream %d of %d (%s)\n", (int)i, (int)count, id[i]->id_str );
         #endif
 
-        if( cielID_open_fd(id[i]) < 0 ){
+        tmpfd = cielID_open_fd(id[i]);
+
+        if( tmpfd < 0 ){
 
             cielID *new_task_id = cielID_create2( sw_generate_new_id( "cldthread", sw_get_current_task_id(), "task" ) );
 
             if(_ciel_spawn_chkpt_task( new_task_id, NULL, id, count, 1 )) i = count;
 
             break;
+
+        } else {
+
+            close(tmpfd);
 
         }
 

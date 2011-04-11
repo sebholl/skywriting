@@ -24,6 +24,7 @@
 				<Compiler>
 					<Add option="-g" />
 					<Add option="-DDEBUG" />
+					<Add option="-DVERBOSE" />
 				</Compiler>
 			</Target>
 			<Target title="Doxygen">
