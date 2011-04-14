@@ -59,7 +59,7 @@ cldvalue *my_thread(int thread_id)
         sleep(1);
     }
 
-    asprintf( &ret_value, "I've finished! (Thread ID: %d)", thread_id );
+    if( asprintf( &ret_value, "I've finished! (Thread ID: %d)", thread_id ) == -1 ) exit( EXIT_FAILURE );
 
     return cldvalue_vargs( 2, cldvalue_string( ret_value ), cldvalue_integer( thread_id ) );
 }

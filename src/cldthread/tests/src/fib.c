@@ -26,7 +26,7 @@ int main(int argc, char *argv[])
 
         }
 
-        asprintf( &_group_id, "%p", Fib );
+        if( asprintf( &_group_id, "%p", Fib ) == 1 ) exit( EXIT_FAILURE );
 
         return cldapp_exit( Fib((void*)termIndex) );
 
