@@ -4,7 +4,7 @@
 
 WRKDIR = `pwd`
 
-all: release
+all: debug release
 	
 release:
 	$(MAKE) release -f fib.cbp.mak
