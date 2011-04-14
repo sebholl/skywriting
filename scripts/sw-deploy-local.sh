@@ -31,7 +31,7 @@ PACKAGES="python python-ply python-httplib2 python-simplejson python-cherrypy3 p
 JDK="openjdk-6-jre"
 
 # cloud threading packages
-CLOUDTHREADS="libcr-dev libcurl4-ssl-dev libpnglite-dev doxygen"
+CLOUDTHREADS="linux-headers-`uname -r` libcr-dev libcurl4-openssl-dev libpnglite-dev doxygen graphviz gcc g++ texlive-font-utils"
 
 if [[ $1 == '' ]]; then
     SWROOT='/opt/skywriting'
