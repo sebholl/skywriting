@@ -258,7 +258,7 @@ size_t cielID_read_streams( cielID *id[], size_t const count ){
 
             cielID *new_task_id = cielID_create2( sw_generate_new_id( "cldthread", sw_get_current_task_id(), "task" ) );
 
-            if(_ciel_spawn_chkpt_task( new_task_id, NULL, id, count, 1 )) i = count;
+            if( _ciel_spawn_chkpt_task( new_task_id, NULL, id, count, 1 ) > 0 ) i = count;
 
             break;
 

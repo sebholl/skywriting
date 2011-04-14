@@ -49,18 +49,14 @@ cldthread *cldthread_smart_create( char *const group_id, cldvalue *(*const fptr)
 
     int result = _ciel_spawn_chkpt_task( thread_task_id, thread_output_id, NULL, 0, 0 );
 
-    if( result < 0 ){ /* resumed process */
+    if( result == 0 ){ /* resumed process */
 
         _cldthread_submit_output( fptr( arg ) );
         exit( EXIT_SUCCESS );
 
-    } else if ( result > 0 ) { /* checkpoint succeeded */
+    } else if ( result < 0 ) { /* error when attempting to checkpoint */
 
-        /* continue on our merry way */
-
-    } else { /* error when attempting to checkpoint */
-
-        fprintf( stderr, "cldthread_smart_create: error while attempting to spawn cloud thread\n" );
+        fprintf( stderr, "cldthread_smart_create(): error while attempting to spawn cloud thread\n" );
         exit( EXIT_FAILURE );
 
     }

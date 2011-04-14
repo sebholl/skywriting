@@ -49,7 +49,7 @@ int blcr_init_framework( void ){
     return 1;
 }
 
-int blcr_checkpoint( const char *filepath ){
+int blcr_fork( const char *filepath ){
 
     int result;
 
@@ -77,31 +77,33 @@ int blcr_checkpoint( const char *filepath ){
     switch(blcr_checkpoint_status){
         case blcr_continue:
             cr_wait_checkpoint( &hndl, NULL );
+            result = 1;
             break;
         case blcr_restart:
-            return -1;
+            result = 0;
             break;
         case blcr_error:
-            /* Do nothing, but silences missing case compiler warning.
-             * Instead, all errors will be detected below.             */
+            result = -1;
             break;
     }
 
     /* Error displaying code from cr_checkpoint.c */
 
     if (result < 0) {
-        if (errno == CR_ENOSUPPORT) {
-            perror("Checkpoint failed: support missing from application\n");
-        } else {
-            printf("cr_request_checkpoint: %s\n", cr_strerror(errno));
-        }
+
+        fprintf( stderr, "blcr_fork(): cr_request_checkpoint(): %s\n", cr_strerror(errno) );
+
+    } else if ( blcr_checkpoint_status == blcr_error ) {
+
+        result = -1;
+
     }
 
     /*
     printf("Checkpointed with return value: %d (errorno: %d).\n", blcr_checkpoint_status, errno );
     */
 
-    return ( (result==0) && (blcr_checkpoint_status!=blcr_error) );
+    return result;
 
 }
 

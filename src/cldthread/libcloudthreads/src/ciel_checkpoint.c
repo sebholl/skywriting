@@ -109,7 +109,7 @@ int _ciel_spawn_chkpt_task( cielID *new_task_id, cielID *output_task_id,
 
     ASPRINTF_ORDIE( _ciel_spawn_chkpt_task(), &path, "/tmp/checkpoint.%s", new_task_id->id_str );
 
-    result = blcr_checkpoint( path );
+    result = blcr_fork( path );
 
     if( result > 0 ){    /* checkpointing succeeded */
 
@@ -171,7 +171,7 @@ int _ciel_spawn_chkpt_task( cielID *new_task_id, cielID *output_task_id,
         cielID_free( new_task_id );
 
 
-    } else if (result < 0) { /* resumed checkpoint */
+    } else if ( result == 0 ) { /* resumed checkpoint */
 
         _ciel_update_env( new_task_id, input_id, input_count );
 
