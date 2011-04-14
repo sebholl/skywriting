@@ -29,9 +29,9 @@ RCFLAGS_RELEASE = $(RCFLAGS)
 LIBDIR_RELEASE = $(LIBDIR)
 LIB_RELEASE = $(LIB)
 LDFLAGS_RELEASE = $(LDFLAGS)
-OBJDIR_RELEASE = .objs
+OBJDIR_RELEASE = .obj/Release
 DEP_RELEASE = 
-OUT_RELEASE = bin/libcloudthreads.a
+OUT_RELEASE = bin/libcloudthreads.release.a
 
 INC_DEBUG = $(INC)
 CFLAGS_DEBUG = $(CFLAGS) -g -DDEBUG
@@ -40,9 +40,9 @@ RCFLAGS_DEBUG = $(RCFLAGS)
 LIBDIR_DEBUG = $(LIBDIR)
 LIB_DEBUG = $(LIB)
 LDFLAGS_DEBUG = $(LDFLAGS)
-OBJDIR_DEBUG = .objs
+OBJDIR_DEBUG = .obj/Debug
 DEP_DEBUG = 
-OUT_DEBUG = bin/libcloudthreads.a
+OUT_DEBUG = bin/libcloudthreads.debug.a
 
 INC_DOXYGEN = $(INC)
 CFLAGS_DOXYGEN = $(CFLAGS)
@@ -61,7 +61,10 @@ all: release debug doxygen
 
 clean: clean_release clean_debug
 
-release: $(OUT_RELEASE)
+release: $(OUT_RELEASE) after_release
+
+after_release:
+	ln -f -s ./libcloudthreads.release.a bin/libcloudthreads.a
 
 $(OUT_RELEASE): $(OBJ_RELEASE) $(DEP_RELEASE)
 	test -d bin || mkdir -p bin
@@ -116,7 +119,10 @@ $(OBJDIR_RELEASE)/lib/cJSON/cJSON.c.o: lib/cJSON/cJSON.c
 clean_release:
 	rm -f $(OBJ_RELEASE) $(OUT_RELEASE)
 
-debug: $(OUT_DEBUG)
+debug: $(OUT_DEBUG) after_debug
+
+after_debug:
+	ln -f -s ./libcloudthreads.debug.a bin/libcloudthreads.a
 
 $(OUT_DEBUG): $(OBJ_DEBUG) $(DEP_DEBUG)
 	test -d bin || mkdir -p bin
@@ -176,7 +182,7 @@ doxygen: before_doxygen
 before_doxygen:
 	doxygen Doxyfile
 
-virtual_all:  release doxygen
+virtual_all:  debug release doxygen
 
-.PHONY: clean clean_release clean_debug before_doxygen doxygen virtual_all
+.PHONY: clean after_release clean_release after_debug clean_debug before_doxygen doxygen virtual_all
 

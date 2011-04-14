@@ -1,7 +1,11 @@
 for d in */
 do
     pushd $d
-    for f in *.cbp; do cbp2make -in $f; done
+    for f in *.cbp
+    do
+        rm -f f.mak
+        cbp2make -in $f 
+    done
     popd
 done
 

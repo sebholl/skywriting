@@ -29,9 +29,9 @@ RCFLAGS_DEBUG = $(RCFLAGS)
 LIBDIR_DEBUG = $(LIBDIR)
 LIB_DEBUG = $(LIB)
 LDFLAGS_DEBUG = $(LDFLAGS)
-OBJDIR_DEBUG = .objs
+OBJDIR_DEBUG = .obj/Debug/fib
 DEP_DEBUG = 
-OUT_DEBUG = ./bin/fib
+OUT_DEBUG = ./bin/Debug/fib
 
 INC_RELEASE = $(INC)
 CFLAGS_RELEASE = $(CFLAGS)
@@ -40,9 +40,9 @@ RCFLAGS_RELEASE = $(RCFLAGS)
 LIBDIR_RELEASE = $(LIBDIR)
 LIB_RELEASE = $(LIB)
 LDFLAGS_RELEASE = $(LDFLAGS)
-OBJDIR_RELEASE = .objs
+OBJDIR_RELEASE = .obj/Release/fib
 DEP_RELEASE = 
-OUT_RELEASE = ./bin/fib
+OUT_RELEASE = ./bin/Release/fib
 
 OBJ_DEBUG = $(OBJDIR_DEBUG)/src/fib.o
 OBJ_RELEASE = $(OBJDIR_RELEASE)/src/fib.o
@@ -54,7 +54,7 @@ clean: clean_debug clean_release
 debug: $(OUT_DEBUG)
 
 $(OUT_DEBUG): $(OBJ_DEBUG) $(DEP_DEBUG)
-	test -d ./bin || mkdir -p ./bin
+	test -d ./bin/Debug || mkdir -p ./bin/Debug
 	$(LD) $(LDFLAGS_DEBUG) $(LIBDIR_DEBUG) -o $(OUT_DEBUG) $(OBJ_DEBUG) $(LIB_DEBUG)
 
 $(OBJDIR_DEBUG)/src/fib.o: src/fib.c
@@ -68,7 +68,7 @@ clean_debug:
 release: $(OUT_RELEASE)
 
 $(OUT_RELEASE): $(OBJ_RELEASE) $(DEP_RELEASE)
-	test -d ./bin || mkdir -p ./bin
+	test -d ./bin/Release || mkdir -p ./bin/Release
 	$(LD) $(LDFLAGS_RELEASE) $(LIBDIR_RELEASE) -o $(OUT_RELEASE) $(OBJ_RELEASE) $(LIB_RELEASE)
 
 $(OBJDIR_RELEASE)/src/fib.o: src/fib.c

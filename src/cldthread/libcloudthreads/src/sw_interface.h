@@ -2,7 +2,9 @@
 
 #include "swref.h"
 
-#define VERBOSE 0
+#ifdef DEBUG
+    #define VERBOSE 1
+#endif
 
 /* Initialization */
 

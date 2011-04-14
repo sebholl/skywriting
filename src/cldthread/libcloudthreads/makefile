@@ -5,7 +5,7 @@
 WRKDIR = `pwd`
 MAKE = make
 
-all: 
+all:
 	$(MAKE) virtual_all -f libcloudthreads.cbp.mak
 	
 release:
@@ -16,9 +16,13 @@ debug:
 
 clean:
 	$(MAKE) clean -f libcloudthreads.cbp.mak
-	rmdir 'bin'
+	rm -f -r 'bin'
 	rm -f -r 'doc'
+	rm -f -r '.obj'
 	rm -f *.layout *.depend
+	
+doxygen:
+	$(MAKE) doxygen -f libcloudthreads.cbp.mak
 	
 
 .PHONY: all release debug clean
