@@ -7,7 +7,6 @@ MAKE = make
 
 all: 
 	$(MAKE) virtual_all -f libcloudthreads.cbp.mak
-	$(MAKE) -C doc/latex all
 	
 release:
 	$(MAKE) release -f libcloudthreads.cbp.mak
