@@ -56,7 +56,8 @@ static void *_cldptr_table_pull( int key ){
     if( (fd >= 0) && (fstat( fd, &buf ) == 0) ){
 
         result = mmap( NULL, buf.st_size, PROT_READ, MAP_PRIVATE, fd, 0 );
-
+        close( fd );
+        
         _cldptr_table_put( key, result );
 
     } else {
