@@ -30,8 +30,6 @@ PACKAGES="python python-ply python-httplib2 python-simplejson python-cherrypy3 p
 # the JDK to install
 JDK="openjdk-6-jre"
 
-# cloud threading packages
-CLOUDTHREADS="linux-headers-`uname -r` libcr-dev libcurl4-openssl-dev libpnglite-dev doxygen graphviz gcc g++ texlive-font-utils"
 
 if [[ $1 == '' ]]; then
     SWROOT='/opt/skywriting'
@@ -59,7 +57,6 @@ echo sun-java6-jre shared/accepted-sun-dlj-v1-1 boolean true | debconf-set-selec
 # install more stuff
 apt-get -qq -y install $PACKAGES 1>&2 2>/dev/null
 apt-get -qq -y install $JDK 1>&2 2>/dev/null
-apt-get -qq -y install $CLOUDTHREADS 1>&2 2>/dev/null
 
 # git checkout
 git clone -q http://github.com/$2/skywriting.git $1
