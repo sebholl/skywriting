@@ -92,7 +92,7 @@ if [ $TARGET == "" ]; then
 fi
 
 I=0
-cat $SOURCE | while myLine=`line`
+cat $SOURCE | while read myLine
 do
     echo -n "Moving store on instance $I: "
     ssh -o StrictHostKeyChecking=no -f -i $KEY $SWUSER@$myLine "mv $SWROOT/store $TARGET; ln -s $TARGET/store/ $SWROOT/store"

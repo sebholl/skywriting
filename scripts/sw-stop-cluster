@@ -78,7 +78,7 @@ done
 # main script
 
 I=0
-cat $SOURCE | while myLine=`line`
+cat $SOURCE | while read myLine
 do
     echo -n "Stopping instance $I "
     if [ "$I" -eq "0" ]; then

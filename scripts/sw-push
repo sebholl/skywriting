@@ -111,7 +111,7 @@ if [[ $TARGET == "" || $PUSHFILE == "" ]]; then
 fi
 
 I=0
-cat $SOURCE | while myLine=`line`
+cat $SOURCE | while read myLine
 do
     echo -n "Pushing to instance $I: "
     if [[ $VERBOSE -eq 1 ]]; then

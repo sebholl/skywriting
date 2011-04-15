@@ -111,7 +111,7 @@ if [[ $TARGET == "" || $PULLFILE == "" ]]; then
 fi
 
 I=0
-cat $SOURCE | while myLine=`line`
+cat $SOURCE | while read myLine
 do
     echo -n "Pulling from to instance $I: "
     mkdir -p $TARGET/$myLine/

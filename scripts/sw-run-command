@@ -97,7 +97,7 @@ if [[ $COMMAND == "" ]]; then
 fi
 
 I=0
-cat $SOURCE | while myLine=`line`
+cat $SOURCE | while read myLine
 do
     echo -n "Updating instance $I: "
     if [[ $VERBOSE -eq 1 ]]; then

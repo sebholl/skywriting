@@ -87,13 +87,13 @@ done
 # main script
 
 I=0
-cat $SOURCE | while myLine=`line`
+cat $SOURCE | while read myLine
 do
     echo -n "Wiping instance $I: "
     if [[ $VERBOSE -eq 1 ]]; then
-	ssh -o StrictHostKeyChecking=no -f -i $KEY $SWUSER@$myLine "cd $SWROOT/store/ ; rm -rf upload* ; rm -rf java* ; rm -rf stdinout* ; rm -rf environ*"
+	ssh -o StrictHostKeyChecking=no -f -i $KEY $SWUSER@$myLine "cd $SWROOT/store/ ; rm -rf *"
     else
-	ssh -o StrictHostKeyChecking=no -f -i $KEY $SWUSER@$myLine "cd $SWROOT/store/ ; rm -rf upload* ; rm -rf java* ; rm -rf stdinout* ; rm -rf environ*" 1>&2 2>/dev/null
+	ssh -o StrictHostKeyChecking=no -f -i $KEY $SWUSER@$myLine "cd $SWROOT/store/ ; rm -rf *" 1>&2 2>/dev/null
     fi
     echo $myLine
     I=`expr $I + 1`
