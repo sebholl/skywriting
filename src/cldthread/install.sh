@@ -8,7 +8,8 @@ KERNELSOURCEPACKAGE="linux-ec2-source-${KERNELVERSION%%-*}"
 
 PACKAGES="libcurl4-openssl-dev libpnglite-dev doxygen graphviz gcc g++ texlive-font-utils libcr-dev"
 
-apt-get install gawk $KERNELSOURCEPACKAGE
+apt-get -qq -y update 1>&2 2>/dev/null
+apt-get -qq -y install gawk $KERNELSOURCEPACKAGE
 
 cd /usr/src/
 
@@ -20,16 +21,16 @@ cp /boot/config-$KERNELVERSION .config
 
 make modules_prepare
 
-apt-get install $KERNELHEADERSPACKAGE
+apt-get -qq -y  install $KERNELHEADERSPACKAGE
 
 cp -R /usr/src/linux-ec2-source-2.6.32 /lib/modules/2.6.32-305-ec2/source
 
-apt-get install $KERNELHEADERSPACKAGE
+apt-get -qq -y  install $KERNELHEADERSPACKAGE
 
-apt-get install blcr-dkms
+apt-get -qq -y  install blcr-dkms
 modprobe -i blcr
 
-apt-get install $PACKAGES
+apt-get -qq -y  install $PACKAGES
 
 cd ${0%/*}
 
