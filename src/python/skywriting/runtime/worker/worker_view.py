@@ -136,6 +136,8 @@ class LogRoot:
 
 class DataRoot:
     
+    _cp_config = {'tools.gzip.on': True}
+    
     def __init__(self, block_store, backup_sender=None, task_pool=None):
         self.block_store = block_store
         self.backup_sender = backup_sender
