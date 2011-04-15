@@ -14,11 +14,11 @@ apt-get -qq -y update 1>&2 2>/dev/null
 
 echo "Retrieving kernel source..."
 
-apt-get -qq -y install gawk $KERNELSOURCEPACKAGE
-
-echo "Extracting source from tar..."
+apt-get -qq -y install gawk $KERNELSOURCEPACKAGE 1>/dev/null
 
 pushd /usr/src/
+
+echo "Extracting source from tar..."
 
 tar xjvf $KERNELSOURCEPACKAGE.tar.bz2 1>/dev/null
 
@@ -30,25 +30,25 @@ cp -f /boot/config-$KERNELVERSION .config
 
 # add this option if it's not listed, otherwise module_prepare will
 # request user input
-if ! grep -q "IRQ_TIME_ACCOUNTING" .config
-  then echo "IRQ_TIME_ACCOUNTING=n" >> .config
+if ! grep -q "CONFIG_IRQ_TIME_ACCOUNTING" .config
+  then echo "CONFIG_IRQ_TIME_ACCOUNTING=n" >> .config
 fi
 
 echo "Configuring kernel source..."
 
-make modules_prepare
+make -s modules_prepare
 
 echo "Installing header package..."
 
-apt-get -qq -y  install $KERNELHEADERSPACKAGE
+apt-get -qq -y  install $KERNELHEADERSPACKAGE 1>/dev/null
 
 cp -R /usr/src/$KERNELHEADERSPACKAGE /lib/modules/$KERNELVERSION/source
 
-apt-get -qq -y  install $KERNELHEADERSPACKAGE
+apt-get -qq -y  install $KERNELHEADERSPACKAGE 1>/dev/null
 
 echo "Installing BLCR-DKMS package..."
 
-apt-get -qq -y  install blcr-dkms
+apt-get -qq -y  install blcr-dkms 1>/dev/null
 
 echo "Installing BLCR kernel module..."
 
@@ -56,13 +56,13 @@ modprobe -i blcr
 
 echo "Installing libCloudThread packages..."
 
-apt-get -qq -y  install $PACKAGES
-
-echo "Running 'make all' on libCloudThreads..."
+apt-get -qq -y  install $PACKAGES 1>/dev/null
 
 popd
 cd ${0%/*}
 
-make all
+echo "Running 'make all' on libCloudThreads..."
+
+make -s all
 
 echo "Finished"

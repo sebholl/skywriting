@@ -33,6 +33,8 @@ swref *sw_move_file_to_store( const char *worker_loc, const char *filepath, cons
 
 char *sw_generate_block_store_path( const char *id );
 
+char *sw_generate_temp_path( const char *id );
+
 int sw_open_fd_for_id( const char *id );
 
 /* Environment querying */

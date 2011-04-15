@@ -107,22 +107,6 @@ int blcr_fork( const char *filepath ){
 
 }
 
-
-char *blcr_generate_context_filename(void)
-{
-    char *p, *context_filename;
-
-    if ( (p = getcwd(NULL, 0)) == NULL) return NULL;
-
-    if( asprintf( &context_filename, "%s/context.%d.%d", p, getpid(), checkpoint_count ) == -1 )
-        context_filename = NULL;
-
-    free(p);
-
-    return (char *)context_filename;
-}
-
-
 /* Helper Functions */
 
 static int blcr_callback()

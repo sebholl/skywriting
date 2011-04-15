@@ -8,4 +8,3 @@ enum blcr_state {
 
 int blcr_init_framework( void );
 int blcr_fork( const char *filepath );
-char* blcr_generate_context_filename(void);

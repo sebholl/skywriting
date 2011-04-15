@@ -105,9 +105,7 @@ int _ciel_spawn_chkpt_task( cielID *new_task_id, cielID *output_task_id,
 
     int result;
 
-    char *path;
-
-    ASPRINTF_ORDIE( _ciel_spawn_chkpt_task(), &path, "/tmp/checkpoint.%s", new_task_id->id_str );
+    char *path = sw_generate_temp_path( new_task_id->id_str );
 
     result = blcr_fork( path );
 

@@ -3,25 +3,6 @@
 
 #include "helper/sha.h"
 
-static char *_sw_generate_temp_path( const char *const id ){
-
-    char *result;
-
-    int len;
-    char *tmp;
-
-    len = asprintf( &tmp, "%s.%s", sw_get_current_task_id(), id );
-
-    tmp = sha1_hex_digest_from_bytes( tmp, len, 1 );
-
-    ASPRINTF_ORNULL( &result, "/tmp/cldthread.%s", tmp );
-
-    free( tmp );
-
-    return result;
-
-}
-
 
 static swref *_sw_post_data_to_worker( const char *const worker_loc,
                                        const char *const id,
@@ -107,7 +88,7 @@ static int _sw_move_to_block_store( const char *const filepath, const char *cons
 static swref *_sw_write_block_store( const char *const id, const void *const data, size_t const size ){
 
     int proceed;
-    char *tmppath = _sw_generate_temp_path( id );
+    char *tmppath = sw_generate_temp_path( id );
 
     if( tmppath != NULL ){
 

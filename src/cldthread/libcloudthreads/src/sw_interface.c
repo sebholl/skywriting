@@ -358,6 +358,25 @@ const char* sw_get_block_store_path( void ){
     return getenv( "CL_BLOCK_STORE" );
 }
 
+char *sw_generate_temp_path( const char *const id ){
+
+    char *result;
+
+    int len;
+    char *tmp;
+
+    len = asprintf( &tmp, "%s.%s", sw_get_current_task_id(), id );
+
+    tmp = sha1_hex_digest_from_bytes( tmp, len, 1 );
+
+    ASPRINTF_ORNULL( &result, "%s/.temp.cldthread.%s", sw_get_block_store_path(), tmp );
+
+    free( tmp );
+
+    return result;
+
+}
+
 
 cJSON *sw_create_json_task_descriptor( const char *const new_task_id,
                                        const char *const output_task_id,
