@@ -234,6 +234,11 @@ swref *sw_move_file_to_store( const char *const worker_url, const char *const fi
 
             result = swref_create( CONCRETE, _id, NULL, buf.st_size, sw_get_current_worker_loc() );
 
+        } else {
+
+            fprintf( stderr, "sw_move_file_to_worker(): couldn't move %s\n", filepath );
+            perror( "sw_move_file_to_worker(): rename failed" );
+
         }
 
     } else {
