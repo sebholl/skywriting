@@ -6,11 +6,11 @@ static int HaltonSeq_intBaseP[] = {2, 3};
 #define HaltonSeq_intBaseK_sz 2
 static int HaltonSeq_intBaseK[] = {63, 40};
 
-typedef struct HaltonSeq {
+typedef struct {
 
     long index;
     double *x;
-    double ** q;
+    double **q;
     int **d;
 
 } HaltonSeq;
@@ -25,7 +25,7 @@ HaltonSeq *HaltonSeq_Create( long const startindex ){
     result->q = calloc( HaltonSeq_intBaseK_sz, sizeof( double * ) );
     result->d = calloc( HaltonSeq_intBaseK_sz, sizeof( int * ) );
 
-    int i;
+    size_t i;
 
     for(i = 0; i < HaltonSeq_intBaseK_sz; i++){
         result->x[i] = 0;
@@ -35,7 +35,7 @@ HaltonSeq *HaltonSeq_Create( long const startindex ){
 
     for(i = 0; i < HaltonSeq_intBaseK_sz; i++){
         long k = startindex;
-        int j;
+        size_t j;
         for(j = 0; j < HaltonSeq_intBaseK[i]; j++){
             result->q[i][j] = (j == 0 ? 1.0 : result->q[i][j-1])/HaltonSeq_intBaseP[i];
             result->d[i][j] = (int)(k % HaltonSeq_intBaseP[i]);
@@ -51,9 +51,9 @@ HaltonSeq *HaltonSeq_Create( long const startindex ){
 
 double *HaltonSeq_NextPoint( HaltonSeq *seq ){
 
-    int i, j;
-
     seq->index++;
+
+    size_t i, j;
 
     for(i = 0; i < HaltonSeq_intBaseK_sz; i++){
         for(j = 0; j < HaltonSeq_intBaseK[i]; j++){
@@ -71,7 +71,7 @@ double *HaltonSeq_NextPoint( HaltonSeq *seq ){
 
 void HaltonSeq_Free( HaltonSeq *seq ){
 
-    int i = 0;
+    size_t i;
 
     for(i = 0; i < HaltonSeq_intBaseK_sz; i++){
         free( seq->q[i] );
