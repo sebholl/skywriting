@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include <pnglite.h>
 #include <cldthread.h>
@@ -26,18 +27,21 @@ int main( int argc, char *argv[] ) {
 
     int countx, county;
     int sizex, sizey;
+    int offx, offy;
 
     int maxit = 250;
     double scale = 0.005;
 
-    if(( argc >= 5 ) && sscanf( argv[1], "%d", &sizex )
+    if(( argc >= 7 ) && sscanf( argv[1], "%d", &sizex )
                      && sscanf( argv[2], "%d", &sizey )
                      && sscanf( argv[3], "%d", &countx )
-                     && sscanf( argv[4], "%d", &county ) ) {
+                     && sscanf( argv[4], "%d", &county )
+                     && sscanf( argv[5], "%d", &offx )
+                     && sscanf( argv[6], "%d", &offy ) ) {
 
-        if( argc >= 6 ) sscanf( argv[5], "%d", &maxit );
+        if( argc >= 8 ) sscanf( argv[7], "%d", &maxit );
 
-        if( argc >= 7 ) sscanf( argv[6], "%lf", &scale );
+        if( argc >= 9 ) sscanf( argv[8], "%lf", &scale );
 
 
         if( !cldthread_init() ) {
@@ -57,8 +61,6 @@ int main( int argc, char *argv[] ) {
 
         input->tWidth = sizex / countx;
         input->tHeight = sizey / county;
-        input->tOffX = 0;
-        input->tOffY = 0;
         input->sWidth = 800;
         input->sHeight = 800;
         input->maxit = maxit;
@@ -68,8 +70,8 @@ int main( int argc, char *argv[] ) {
 
         for( y = 0; y < county; ++y ) {
             for( x = 0; x < countx; ++x ) {
-                input->tOffX = x;
-                input->tOffY = y;
+                input->tOffX = x + offx;
+                input->tOffY = y + offy;
                 tiles[( y*countx ) + x] = cldthread_create( Mandelbrot_Tile_Generator, input );
             }
         }
@@ -92,6 +94,7 @@ int main( int argc, char *argv[] ) {
 
         free( tiles );
 
+        /* We are streaming our result, so this return value is ignore anyway. */
         return cldapp_exit( cldvalue_none() );
 
     } else {
@@ -104,6 +107,35 @@ int main( int argc, char *argv[] ) {
 
 }
 
+/*
+  Adapted from http://mjijackson.com/2008/02/rgb-to-hsl-and-rgb-to-hsv-color-model-conversion-algorithms-in-javascript,
+  which was adapted from http://en.wikipedia.org/wiki/HSV_color_space.
+ */
+int hsvToRgb( double h, double s, double v ){
+
+    double i = floor( h * 6 );
+    double f = ( h * 6 ) - i;
+
+    char p = (char) ((v * (1.0 - s)) * 255);
+    char q = (char) ((v * (1.0 - f * s)) * 255);
+    char t = (char) ((v * (1.0 - (1.0 - f) * s)) * 255);
+
+    char r, g, b;
+
+    switch( ((int)i) % 6 ){
+        case 0: r = v, g = t, b = p; break;
+        case 1: r = q, g = v, b = p; break;
+        case 2: r = p, g = v, b = t; break;
+        case 3: r = p, g = q, b = v; break;
+        case 4: r = t, g = p, b = v; break;
+        case 5: r = v, g = p, b = q; break;
+        default: r = 255; g = 255; b = 255; break;
+    }
+
+    return ( b << 16 ) | ( g << 8 ) | r;
+}
+
+
 int getPixel( double x0, double y0, int maxit ) {
 
     double x = 0.0;
@@ -114,7 +146,8 @@ int getPixel( double x0, double y0, int maxit ) {
 
     int it = 0;
 
-    while( x2 + y2 < 4.0  &&  it < maxit ) {
+    while( ( x2 + y2 < 4.0 ) && ( it < maxit ) ) {
+
         y = 2 * x * y + y0;
         x = x2 - y2 + x0;
 
@@ -122,9 +155,12 @@ int getPixel( double x0, double y0, int maxit ) {
         y2 = y * y;
 
         it++;
+
     }
 
-    return ((( it * 0xFF ) / maxit ) << 24 ) | 0x004080FF;
+    return hsvToRgb( ((double)it)/maxit, (0.6+0.4*cos( it / 40.0 )), 1.0 ) | 0xFF000000;
+    //return ((( it * 0xFF ) / maxit ) << 24 ) | 0x004080FF;
+    //return 0xFF000000 | it;
 
 }
 
@@ -148,9 +184,7 @@ cldvalue *Mandelbrot_Tile_Generator( void *arg ) {
 
     for( localJ = 0; localJ < tHeight; ++localJ ) {
         for( localI = 0; localI < tWidth; ++localI ) {
-            data[i++] = getPixel( iLoopConst + localI * scale,
-                                  jLoopConst + localJ * scale,
-                                  maxit );
+            data[i++] = getPixel( iLoopConst + localI * scale, jLoopConst + localJ * scale, maxit );
         }
     }
 
@@ -162,6 +196,7 @@ cldvalue *Mandelbrot_Tile_Generator( void *arg ) {
 
     png_close_file( &pngInfo );
 
+    /* We are streaming our result, so this return value is ignore anyway. */
     return cldvalue_none();
 
 }

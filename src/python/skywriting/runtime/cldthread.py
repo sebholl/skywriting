@@ -151,8 +151,13 @@ class _CloudProcessCommonExecutor(SWExecutor):
                 # XXX: fix size_hint and related.
                 # block_store.store_object(True, 'json', self.output_ids[0])
                 
-                real_ref = SW2_ConcreteReference(self.output_ids[0], 0)
-                real_ref.add_location_hint(block_store.netloc)
+                try:
+                    with open(block_store.filename(id), "wb") as data_file:
+                		real_ref = SW2_ConcreteReference( self.output_ids[0], data_file.tell() )
+                		real_ref.add_location_hint( block_store.netloc )
+                except:
+                	real_ref = None
+                
                 self.output_refs[0] = real_ref
             else:
                 cherrypy.log.error( "Process terminated with unexpected return code (%s)." % rc, "EXEC", logging.ERROR )

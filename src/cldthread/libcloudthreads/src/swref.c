@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <sys/stat.h>
 
 #include "sw_interface.h"
 #include "swref.h"
@@ -150,6 +151,32 @@ swref *swref_at_id( cielID *const id ){
     }
 
     return result;
+
+}
+
+swref * concrete_swref_for_cielID( cielID *const id ){
+
+    swref * result = NULL;
+
+    char *path = sw_generate_block_store_path( id->id_str );
+
+    struct stat buf;
+
+    if( stat( path, &buf ) == 0 ){
+
+        result = swref_create( CONCRETE, id->id_str, NULL, buf.st_size, sw_get_current_worker_loc() );
+
+    }
+
+    free( path );
+
+    return result;
+
+}
+
+swref * future_swref_for_cielID( cielID *const id ){
+
+    return swref_create( FUTURE, id->id_str, NULL, 0, NULL );
 
 }
 

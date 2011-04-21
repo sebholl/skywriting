@@ -214,7 +214,7 @@ int cielID_finalize_stream( cielID *id ){
 
             cielID_close_fd( id );
 
-            if( !(result = ( rename( streamfilepath, concretefilepath ) == 0 )) ){
+            if( rename( streamfilepath, concretefilepath ) != 0 ){
 
                 fprintf( stderr, "cielID_finalize_stream(): unable to finalize stream [FROM: %s\nTO: %s\n]", streamfilepath, concretefilepath );
                 perror( "block-store renaming failed\n" );

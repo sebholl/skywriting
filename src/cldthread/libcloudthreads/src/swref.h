@@ -65,6 +65,9 @@ char *                   swref_to_data   ( const swref *ref, size_t *size_out );
 swref *                  swref_at_id( cielID *id );
 cielID *                 cielID_of_swref( const swref *ref );
 
+swref *                  concrete_swref_for_cielID( cielID *id );
+swref *                  future_swref_for_cielID( cielID *id );
+
 #define ASPRINTF_ORNULL( checkpoint, args... ) if( asprintf( checkpoint, args ) == -1 ) *checkpoint = NULL
 #define ASPRINTF_ORDIE( function_name, checkpoint, args... ) \
     if( asprintf( checkpoint, args ) == -1 ) { \

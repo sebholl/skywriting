@@ -142,7 +142,7 @@ int _ciel_spawn_chkpt_task( cielID *new_task_id, cielID *output_task_id,
 
         for(i = 0; i < input_count; i++ ){
             ASPRINTF_ORDIE( _ciel_spawn_chkpt_task(), &tmp, "input%d", i );
-            ref = swref_create( FUTURE, input_id[i]->id_str, NULL, 0, NULL );
+            ref = future_swref_for_cielID( input_id[i] );
             cJSON_AddItemToObject( jsonenc_dpnds, tmp, swref_serialize( ref) );
             swref_free( ref );
             free(tmp);
