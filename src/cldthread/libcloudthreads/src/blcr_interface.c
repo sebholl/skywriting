@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "helper/timer.h"
+
 #include <libcr.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -50,6 +52,8 @@ int blcr_init_framework( void ){
 }
 
 int blcr_fork( const char *filepath ){
+
+    TIMER_LABEL( blcr_fork() )
 
     int result;
 

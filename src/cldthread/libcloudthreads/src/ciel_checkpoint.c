@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "helper/timer.h"
+
 #include "cielID.h"
 #include "cldptr.h"
 #include "sw_interface.h"
@@ -38,6 +40,8 @@ static inline void _strip_new_line( char *const string ){
 }
 
 static void _ciel_update_env( cielID *const new_task_id, cielID *input_id[], size_t const input_count ){
+
+    TIMER_LABEL( _ciel_update_env() )
 
     FILE *named_pipe;
     char *path, *path2;
@@ -105,6 +109,8 @@ int _ciel_spawn_chkpt_task( cielID *new_task_id, cielID *output_task_id,
 
     int result;
 
+    TIMER_LABEL( _ciel_spawn_chkpt_task() )
+
     char *path = sw_generate_temp_path( new_task_id->id_str );
 
     result = blcr_fork( path );
@@ -118,6 +124,7 @@ int _ciel_spawn_chkpt_task( cielID *new_task_id, cielID *output_task_id,
         swref *args_ref;
 
         char *tmp;
+
 
         jsonenc_args = cJSON_CreateObject();
 

@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "helper/timer.h"
+
 #include "../lib/cJSON/cJSON.h"
 
 #include "swref.h"
@@ -14,6 +16,12 @@
 /* API */
 
 int cldthread_init( void ){
+
+    TIMER_LABEL( cldthread_init() )
+
+    #ifdef PROFILE
+    _timer_fp = fopen( "timings.csv", "w" );
+    #endif
 
     if( sw_init() && blcr_init_framework() ){
 
@@ -34,6 +42,8 @@ int cldthread_init( void ){
 
 cldthread *cldthread_smart_create( char *const group_id, cldvalue *(*const fptr)(void *), void *const arg ){
 
+    TIMER_LABEL( cldthread_smart_create() )
+
     cielID *thread_task_id;
     cielID *thread_output_id;
 
@@ -48,6 +58,8 @@ cldthread *cldthread_smart_create( char *const group_id, cldvalue *(*const fptr)
     thread_output_id = cielID_create2( sw_generate_output_id( thread_task_id->id_str ) );
 
     int result = _ciel_spawn_chkpt_task( thread_task_id, thread_output_id, NULL, 0, 0 );
+
+
 
     if( result == 0 ){ /* resumed process */
 

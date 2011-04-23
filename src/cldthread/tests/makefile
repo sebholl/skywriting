@@ -35,6 +35,15 @@ clean:
 	rm -f -r ./.obj
 	rm -f *.layout *.depend
 	
+profile:
+	$(MAKE) profile -f fib.cbp.mak
+	$(MAKE) profile -f helloworld.cbp.mak
+	$(MAKE) profile -f linkedlist.cbp.mak
+	$(MAKE) profile -f pi.cbp.mak
+	$(MAKE) profile -f prodcons.cbp.mak
+	$(MAKE) profile -f mandelbrot.cbp.mak
+	./updatesymlinks.sh Profile
+	
 
 .PHONY: all release debug clean
 

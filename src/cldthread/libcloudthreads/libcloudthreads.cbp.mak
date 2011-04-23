@@ -19,7 +19,7 @@ CFLAGS = -march=pentium4 -O3 -Winit-self -Wcast-align -Wfloat-equal -Winline -Wm
 RESINC = 
 RCFLAGS = 
 LIBDIR =
-LIB = -lcr -lssl -lcurl
+LIB = -lcr -lssl -lcurl -lrt
 LDFLAGS =
 
 INC_RELEASE = $(INC)
@@ -32,6 +32,17 @@ LDFLAGS_RELEASE = $(LDFLAGS)
 OBJDIR_RELEASE = .obj/Release
 DEP_RELEASE = 
 OUT_RELEASE = bin/libcloudthreads.release.a
+
+INC_PROFILE = $(INC)
+CFLAGS_PROFILE = $(CFLAGS) -g -finstrument-functions -finstrument-functions-exclude-file-list=helper/timer.c -DPROFILE
+RESINC_PROFILE = $(RESINC)
+RCFLAGS_PROFILE = $(RCFLAGS)
+LIBDIR_PROFILE = $(LIBDIR)
+LIB_PROFILE = $(LIB)
+LDFLAGS_PROFILE = $(LDFLAGS)
+OBJDIR_PROFILE = .obj/Profile
+DEP_PROFILE = 
+OUT_PROFILE = bin/libcloudthreads.profile.a
 
 INC_DEBUG = $(INC)
 CFLAGS_DEBUG = $(CFLAGS) -g -DDEBUG
@@ -54,12 +65,13 @@ LDFLAGS_DOXYGEN = $(LDFLAGS)
 OBJDIR_DOXYGEN = .objs
 DEP_DOXYGEN = 
 
-OBJ_RELEASE = $(OBJDIR_RELEASE)/src/swref.c.o $(OBJDIR_RELEASE)/src/sw_interface.c.o $(OBJDIR_RELEASE)/src/helper/sha.c.o $(OBJDIR_RELEASE)/src/helper/curl.c.o $(OBJDIR_RELEASE)/src/cldvalue.c.o $(OBJDIR_RELEASE)/src/cldthread.c.o $(OBJDIR_RELEASE)/src/cldptr.c.o $(OBJDIR_RELEASE)/src/ciel_checkpoint.c.o $(OBJDIR_RELEASE)/src/cielID.c.o $(OBJDIR_RELEASE)/src/blcr_interface.c.o $(OBJDIR_RELEASE)/lib/cJSON/cJSON.c.o
-OBJ_DEBUG = $(OBJDIR_DEBUG)/src/swref.c.o $(OBJDIR_DEBUG)/src/sw_interface.c.o $(OBJDIR_DEBUG)/src/helper/sha.c.o $(OBJDIR_DEBUG)/src/helper/curl.c.o $(OBJDIR_DEBUG)/src/cldvalue.c.o $(OBJDIR_DEBUG)/src/cldthread.c.o $(OBJDIR_DEBUG)/src/cldptr.c.o $(OBJDIR_DEBUG)/src/ciel_checkpoint.c.o $(OBJDIR_DEBUG)/src/cielID.c.o $(OBJDIR_DEBUG)/src/blcr_interface.c.o $(OBJDIR_DEBUG)/lib/cJSON/cJSON.c.o
+OBJ_RELEASE = $(OBJDIR_RELEASE)/src/swref.c.o $(OBJDIR_RELEASE)/src/sw_interface.c.o $(OBJDIR_RELEASE)/src/helper/timer.c.o $(OBJDIR_RELEASE)/src/helper/sha.c.o $(OBJDIR_RELEASE)/src/helper/curl.c.o $(OBJDIR_RELEASE)/src/cldvalue.c.o $(OBJDIR_RELEASE)/src/cldthread.c.o $(OBJDIR_RELEASE)/src/cldptr.c.o $(OBJDIR_RELEASE)/src/ciel_checkpoint.c.o $(OBJDIR_RELEASE)/src/cielID.c.o $(OBJDIR_RELEASE)/src/blcr_interface.c.o $(OBJDIR_RELEASE)/lib/cJSON/cJSON.c.o
+OBJ_PROFILE = $(OBJDIR_PROFILE)/src/swref.c.o $(OBJDIR_PROFILE)/src/sw_interface.c.o $(OBJDIR_PROFILE)/src/helper/timer.c.o $(OBJDIR_PROFILE)/src/helper/sha.c.o $(OBJDIR_PROFILE)/src/helper/curl.c.o $(OBJDIR_PROFILE)/src/cldvalue.c.o $(OBJDIR_PROFILE)/src/cldthread.c.o $(OBJDIR_PROFILE)/src/cldptr.c.o $(OBJDIR_PROFILE)/src/ciel_checkpoint.c.o $(OBJDIR_PROFILE)/src/cielID.c.o $(OBJDIR_PROFILE)/src/blcr_interface.c.o $(OBJDIR_PROFILE)/lib/cJSON/cJSON.c.o
+OBJ_DEBUG = $(OBJDIR_DEBUG)/src/swref.c.o $(OBJDIR_DEBUG)/src/sw_interface.c.o $(OBJDIR_DEBUG)/src/helper/timer.c.o $(OBJDIR_DEBUG)/src/helper/sha.c.o $(OBJDIR_DEBUG)/src/helper/curl.c.o $(OBJDIR_DEBUG)/src/cldvalue.c.o $(OBJDIR_DEBUG)/src/cldthread.c.o $(OBJDIR_DEBUG)/src/cldptr.c.o $(OBJDIR_DEBUG)/src/ciel_checkpoint.c.o $(OBJDIR_DEBUG)/src/cielID.c.o $(OBJDIR_DEBUG)/src/blcr_interface.c.o $(OBJDIR_DEBUG)/lib/cJSON/cJSON.c.o
 
-all: release debug doxygen
+all: release profile debug doxygen
 
-clean: clean_release clean_debug
+clean: clean_release clean_profile clean_debug
 
 release: $(OUT_RELEASE) after_release
 
@@ -78,6 +90,10 @@ $(OBJDIR_RELEASE)/src/swref.c.o: src/swref.c
 $(OBJDIR_RELEASE)/src/sw_interface.c.o: src/sw_interface.c
 	test -d $(OBJDIR_RELEASE)/src || mkdir -p $(OBJDIR_RELEASE)/src
 	$(CC) $(CFLAGS_RELEASE) $(INC_RELEASE) -c -o $(OBJDIR_RELEASE)/src/sw_interface.c.o src/sw_interface.c
+
+$(OBJDIR_RELEASE)/src/helper/timer.c.o: src/helper/timer.c
+	test -d $(OBJDIR_RELEASE)/src/helper || mkdir -p $(OBJDIR_RELEASE)/src/helper
+	$(CC) $(CFLAGS_RELEASE) $(INC_RELEASE) -c -o $(OBJDIR_RELEASE)/src/helper/timer.c.o src/helper/timer.c
 
 $(OBJDIR_RELEASE)/src/helper/sha.c.o: src/helper/sha.c
 	test -d $(OBJDIR_RELEASE)/src/helper || mkdir -p $(OBJDIR_RELEASE)/src/helper
@@ -119,6 +135,68 @@ $(OBJDIR_RELEASE)/lib/cJSON/cJSON.c.o: lib/cJSON/cJSON.c
 clean_release:
 	rm -f $(OBJ_RELEASE) $(OUT_RELEASE)
 
+profile: $(OUT_PROFILE) after_profile
+
+after_profile:
+	ln -f -s ./libcloudthreads.profile.a bin/libcloudthreads.a
+
+$(OUT_PROFILE): $(OBJ_PROFILE) $(DEP_PROFILE)
+	test -d bin || mkdir -p bin
+	$(AR) rcs $(OUT_PROFILE) $(OBJ_PROFILE)
+	$(AR) rcs $(OUT_PROFILE) $(OBJ_PROFILE)
+
+$(OBJDIR_PROFILE)/src/swref.c.o: src/swref.c
+	test -d $(OBJDIR_PROFILE)/src || mkdir -p $(OBJDIR_PROFILE)/src
+	$(CC) $(CFLAGS_PROFILE) $(INC_PROFILE) -c -o $(OBJDIR_PROFILE)/src/swref.c.o src/swref.c
+
+$(OBJDIR_PROFILE)/src/sw_interface.c.o: src/sw_interface.c
+	test -d $(OBJDIR_PROFILE)/src || mkdir -p $(OBJDIR_PROFILE)/src
+	$(CC) $(CFLAGS_PROFILE) $(INC_PROFILE) -c -o $(OBJDIR_PROFILE)/src/sw_interface.c.o src/sw_interface.c
+
+$(OBJDIR_PROFILE)/src/helper/timer.c.o: src/helper/timer.c
+	test -d $(OBJDIR_PROFILE)/src/helper || mkdir -p $(OBJDIR_PROFILE)/src/helper
+	$(CC) $(CFLAGS_PROFILE) $(INC_PROFILE) -c -o $(OBJDIR_PROFILE)/src/helper/timer.c.o src/helper/timer.c
+
+$(OBJDIR_PROFILE)/src/helper/sha.c.o: src/helper/sha.c
+	test -d $(OBJDIR_PROFILE)/src/helper || mkdir -p $(OBJDIR_PROFILE)/src/helper
+	$(CC) $(CFLAGS_PROFILE) $(INC_PROFILE) -c -o $(OBJDIR_PROFILE)/src/helper/sha.c.o src/helper/sha.c
+
+$(OBJDIR_PROFILE)/src/helper/curl.c.o: src/helper/curl.c
+	test -d $(OBJDIR_PROFILE)/src/helper || mkdir -p $(OBJDIR_PROFILE)/src/helper
+	$(CC) $(CFLAGS_PROFILE) $(INC_PROFILE) -c -o $(OBJDIR_PROFILE)/src/helper/curl.c.o src/helper/curl.c
+
+$(OBJDIR_PROFILE)/src/cldvalue.c.o: src/cldvalue.c
+	test -d $(OBJDIR_PROFILE)/src || mkdir -p $(OBJDIR_PROFILE)/src
+	$(CC) $(CFLAGS_PROFILE) $(INC_PROFILE) -c -o $(OBJDIR_PROFILE)/src/cldvalue.c.o src/cldvalue.c
+
+$(OBJDIR_PROFILE)/src/cldthread.c.o: src/cldthread.c
+	test -d $(OBJDIR_PROFILE)/src || mkdir -p $(OBJDIR_PROFILE)/src
+	$(CC) $(CFLAGS_PROFILE) $(INC_PROFILE) -c -o $(OBJDIR_PROFILE)/src/cldthread.c.o src/cldthread.c
+
+$(OBJDIR_PROFILE)/src/cldptr.c.o: src/cldptr.c
+	test -d $(OBJDIR_PROFILE)/src || mkdir -p $(OBJDIR_PROFILE)/src
+	$(CC) $(CFLAGS_PROFILE) $(INC_PROFILE) -c -o $(OBJDIR_PROFILE)/src/cldptr.c.o src/cldptr.c
+
+$(OBJDIR_PROFILE)/src/ciel_checkpoint.c.o: src/ciel_checkpoint.c
+	test -d $(OBJDIR_PROFILE)/src || mkdir -p $(OBJDIR_PROFILE)/src
+	$(CC) $(CFLAGS_PROFILE) $(INC_PROFILE) -c -o $(OBJDIR_PROFILE)/src/ciel_checkpoint.c.o src/ciel_checkpoint.c
+
+$(OBJDIR_PROFILE)/src/cielID.c.o: src/cielID.c
+	test -d $(OBJDIR_PROFILE)/src || mkdir -p $(OBJDIR_PROFILE)/src
+	$(CC) $(CFLAGS_PROFILE) $(INC_PROFILE) -c -o $(OBJDIR_PROFILE)/src/cielID.c.o src/cielID.c
+
+$(OBJDIR_PROFILE)/src/blcr_interface.c.o: src/blcr_interface.c
+	test -d $(OBJDIR_PROFILE)/src || mkdir -p $(OBJDIR_PROFILE)/src
+	$(CC) $(CFLAGS_PROFILE) $(INC_PROFILE) -c -o $(OBJDIR_PROFILE)/src/blcr_interface.c.o src/blcr_interface.c
+
+$(OBJDIR_PROFILE)/lib/cJSON/cJSON.c.o: lib/cJSON/cJSON.c
+	test -d $(OBJDIR_PROFILE)/lib/cJSON || mkdir -p $(OBJDIR_PROFILE)/lib/cJSON
+	$(CC) $(CFLAGS_PROFILE) $(INC_PROFILE) -c -o $(OBJDIR_PROFILE)/lib/cJSON/cJSON.c.o lib/cJSON/cJSON.c
+
+
+clean_profile:
+	rm -f $(OBJ_PROFILE) $(OUT_PROFILE)
+
 debug: $(OUT_DEBUG) after_debug
 
 after_debug:
@@ -136,6 +214,10 @@ $(OBJDIR_DEBUG)/src/swref.c.o: src/swref.c
 $(OBJDIR_DEBUG)/src/sw_interface.c.o: src/sw_interface.c
 	test -d $(OBJDIR_DEBUG)/src || mkdir -p $(OBJDIR_DEBUG)/src
 	$(CC) $(CFLAGS_DEBUG) $(INC_DEBUG) -c -o $(OBJDIR_DEBUG)/src/sw_interface.c.o src/sw_interface.c
+
+$(OBJDIR_DEBUG)/src/helper/timer.c.o: src/helper/timer.c
+	test -d $(OBJDIR_DEBUG)/src/helper || mkdir -p $(OBJDIR_DEBUG)/src/helper
+	$(CC) $(CFLAGS_DEBUG) $(INC_DEBUG) -c -o $(OBJDIR_DEBUG)/src/helper/timer.c.o src/helper/timer.c
 
 $(OBJDIR_DEBUG)/src/helper/sha.c.o: src/helper/sha.c
 	test -d $(OBJDIR_DEBUG)/src/helper || mkdir -p $(OBJDIR_DEBUG)/src/helper
@@ -182,7 +264,7 @@ doxygen: before_doxygen
 before_doxygen:
 	doxygen Doxyfile
 
-virtual_all:  debug release doxygen
+virtual_all:  profile debug release doxygen
 
-.PHONY: clean after_release clean_release after_debug clean_debug before_doxygen doxygen virtual_all
+.PHONY: clean after_release clean_release after_profile clean_profile after_debug clean_debug before_doxygen doxygen virtual_all
 

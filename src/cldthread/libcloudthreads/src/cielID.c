@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include "helper/timer.h"
 #include "helper/curl.h"
 #include "sw_interface.h"
 #include "swref.h"
@@ -73,6 +74,8 @@ void cielID_free( cielID *id ){
 
 
 char *cielID_dump_stream( cielID *id, size_t * const size_out ){
+
+    TIMER_LABEL( cielID_dump_stream() )
 
     char *result = NULL;
 

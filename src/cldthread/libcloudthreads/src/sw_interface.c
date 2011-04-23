@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "helper/timer.h"
 #include "helper/curl.h"
 
 #include "sw_interface.h"
@@ -33,6 +34,8 @@ int sw_spawntask( const char *const new_task_id,
                   const char *const handler,
                   cJSON *const jsonenc_dependencies,
                   int const is_continuation ){
+
+    TIMER_LABEL( sw_spawntask() )
 
     struct MemoryStruct postdata;
 
@@ -100,6 +103,8 @@ int sw_spawntask( const char *const new_task_id,
 }
 
 int sw_publish_ref( const char *const master_loc, const char *const task_id, const swref *const ref ){
+
+    TIMER_LABEL( sw_publish_ref() )
 
     char *post_url;
 

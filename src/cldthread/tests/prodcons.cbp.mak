@@ -22,6 +22,17 @@ LIBDIR =
 LIB = ../libcloudthreads/bin/libcloudthreads.a -lcr -lssl -lcurl
 LDFLAGS =
 
+INC_PROFILE = $(INC)
+CFLAGS_PROFILE = $(CFLAGS)
+RESINC_PROFILE = $(RESINC)
+RCFLAGS_PROFILE = $(RCFLAGS)
+LIBDIR_PROFILE = $(LIBDIR)
+LIB_PROFILE = $(LIB)
+LDFLAGS_PROFILE = $(LDFLAGS)
+OBJDIR_PROFILE = .obj/Profile/prodcons
+DEP_PROFILE = 
+OUT_PROFILE = ./bin/Profile/prodcons
+
 INC_DEBUG = $(INC)
 CFLAGS_DEBUG = $(CFLAGS) -g
 RESINC_DEBUG = $(RESINC)
@@ -44,12 +55,27 @@ OBJDIR_RELEASE = .obj/Release/prodcons
 DEP_RELEASE = 
 OUT_RELEASE = ./bin/Release/prodcons
 
+OBJ_PROFILE = $(OBJDIR_PROFILE)/src/prodcons.o
 OBJ_DEBUG = $(OBJDIR_DEBUG)/src/prodcons.o
 OBJ_RELEASE = $(OBJDIR_RELEASE)/src/prodcons.o
 
-all: debug release
+all: profile debug release
 
-clean: clean_debug clean_release
+clean: clean_profile clean_debug clean_release
+
+profile: $(OUT_PROFILE)
+
+$(OUT_PROFILE): $(OBJ_PROFILE) $(DEP_PROFILE)
+	test -d ./bin/Profile || mkdir -p ./bin/Profile
+	$(LD) $(LDFLAGS_PROFILE) $(LIBDIR_PROFILE) -o $(OUT_PROFILE) $(OBJ_PROFILE) $(LIB_PROFILE)
+
+$(OBJDIR_PROFILE)/src/prodcons.o: src/prodcons.c
+	test -d $(OBJDIR_PROFILE)/src || mkdir -p $(OBJDIR_PROFILE)/src
+	$(CC) $(CFLAGS_PROFILE) $(INC_PROFILE) -c -o $(OBJDIR_PROFILE)/src/prodcons.o src/prodcons.c
+
+
+clean_profile:
+	rm -f $(OBJ_PROFILE) $(OUT_PROFILE)
 
 debug: $(OUT_DEBUG)
 
@@ -79,5 +105,5 @@ $(OBJDIR_RELEASE)/src/prodcons.o: src/prodcons.c
 clean_release:
 	rm -f $(OBJ_RELEASE) $(OUT_RELEASE)
 
-.PHONY: clean clean_debug clean_release
+.PHONY: clean clean_profile clean_debug clean_release
 

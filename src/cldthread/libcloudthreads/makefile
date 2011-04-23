@@ -24,6 +24,9 @@ clean:
 doxygen:
 	$(MAKE) doxygen -f libcloudthreads.cbp.mak
 	
+profile:
+	$(MAKE) profile -f libcloudthreads.cbp.mak
+	
 
 .PHONY: all release debug clean
 

@@ -22,13 +22,24 @@ LIBDIR =
 LIB = ../libcloudthreads/bin/libcloudthreads.a -lcr -lssl -lcurl -lpnglite
 LDFLAGS =
 
+INC_PROFILE = $(INC)
+CFLAGS_PROFILE = $(CFLAGS)
+RESINC_PROFILE = $(RESINC)
+RCFLAGS_PROFILE = $(RCFLAGS)
+LIBDIR_PROFILE = $(LIBDIR)
+LIB_PROFILE = $(LIB)
+LDFLAGS_PROFILE = $(LDFLAGS)
+OBJDIR_PROFILE = .obj/Profile/mandelbrot
+DEP_PROFILE = 
+OUT_PROFILE = ./bin/Profile/mandelbrot
+
 INC_DEBUG = $(INC)
 CFLAGS_DEBUG = $(CFLAGS) -g
 RESINC_DEBUG = $(RESINC)
 RCFLAGS_DEBUG = $(RCFLAGS)
 LIBDIR_DEBUG = $(LIBDIR)
 LIB_DEBUG = $(LIB)
-LDFLAGS_DEBUG = $(LDFLAGS)
+LDFLAGS_DEBUG = $(LDFLAGS) -pg
 OBJDIR_DEBUG = .obj/Debug/mandelbrot
 DEP_DEBUG = 
 OUT_DEBUG = ./bin/Debug/mandelbrot
@@ -44,12 +55,27 @@ OBJDIR_RELEASE = .obj/Release/mandelbrot
 DEP_RELEASE = 
 OUT_RELEASE = ./bin/Release/mandelbrot
 
+OBJ_PROFILE = $(OBJDIR_PROFILE)/src/mandelbrot.o
 OBJ_DEBUG = $(OBJDIR_DEBUG)/src/mandelbrot.o
 OBJ_RELEASE = $(OBJDIR_RELEASE)/src/mandelbrot.o
 
-all: debug release
+all: profile debug release
 
-clean: clean_debug clean_release
+clean: clean_profile clean_debug clean_release
+
+profile: $(OUT_PROFILE)
+
+$(OUT_PROFILE): $(OBJ_PROFILE) $(DEP_PROFILE)
+	test -d ./bin/Profile || mkdir -p ./bin/Profile
+	$(LD) $(LDFLAGS_PROFILE) $(LIBDIR_PROFILE) -o $(OUT_PROFILE) $(OBJ_PROFILE) $(LIB_PROFILE)
+
+$(OBJDIR_PROFILE)/src/mandelbrot.o: src/mandelbrot.c
+	test -d $(OBJDIR_PROFILE)/src || mkdir -p $(OBJDIR_PROFILE)/src
+	$(CC) $(CFLAGS_PROFILE) $(INC_PROFILE) -c -o $(OBJDIR_PROFILE)/src/mandelbrot.o src/mandelbrot.c
+
+
+clean_profile:
+	rm -f $(OBJ_PROFILE) $(OUT_PROFILE)
 
 debug: $(OUT_DEBUG)
 
@@ -79,5 +105,5 @@ $(OBJDIR_RELEASE)/src/mandelbrot.o: src/mandelbrot.c
 clean_release:
 	rm -f $(OBJ_RELEASE) $(OUT_RELEASE)
 
-.PHONY: clean clean_debug clean_release
+.PHONY: clean clean_profile clean_debug clean_release
 

@@ -177,13 +177,18 @@ class CloudAppExecutor(_CloudProcessCommonExecutor):
         try:
             self.app_ref = args['app_ref']
             self.app_args = args.get('app_args', [])
+            self.app_trace = args.get('trace', 0 )
         except KeyError:
             raise BlameUserException('Incorrect arguments to the CloudApp: %s' % repr(args))
         
         
     def get_process_args(self):
         cherrypy.log.error("CloudAppExecutor package path : %s" % self.filenames, "CloudAppExecutor", logging.INFO)
-        return self.filenames + map( str, self.app_args )
+        args = []
+        if self.app_trace != 0:
+        	args += "strace"
+        args += self.filenames + map( str, self.app_args )
+        return args
     
     def before_execute(self, block_store):
         cherrypy.log.error("Running CloudAppExecutor for : %s" % self.app_ref, "CloudAppExecutor", logging.INFO)
