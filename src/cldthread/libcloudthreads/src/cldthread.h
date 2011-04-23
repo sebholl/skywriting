@@ -131,14 +131,26 @@ cldthread *cldthread_smart_create( char *group_id, cldvalue *(*fptr)(void *), vo
 
 /*!
  *  Stream output from the current thread.  The returned file descriptor will close
- *  automatically once returned from the entry point of the thread or can be closed
+ *  automatically after returning from the entry point of the thread or can be closed
  *  earlier using cldthread_close_result_stream().  Any thread attempting to join this thread
  *  will resume as soon as possible and can read from the stream using
- *  cldthread_result_as_fd() .
+ *  cldthread_result_as_fd().
+ *
+ *  Note: As soon as the thread returns, the stream to any reading Cloud Threads will be
+ *  instantly terminated and they won't be able to read any further from it.
  *
  *  @returns A file descriptor that we can stream thread output to.
  */
 int cldthread_stream_result( void );
+
+
+/*!
+ *  Write data directly to a Cloud Thread's output.  The caller is responsible for
+ *  closing the returned fd once they have finished with it.
+ *
+ *  @returns A file descriptor that thread output can be written to.
+ */
+int cldthread_write_result( void );
 
 
 /*!

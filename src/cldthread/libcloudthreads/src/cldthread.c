@@ -65,6 +65,7 @@ cldthread *cldthread_smart_create( char *const group_id, cldvalue *(*const fptr)
 
 }
 
+
 static void *(*_posixfptr)(void *);
 
 static cldvalue *_posixstub( void *arg ){
@@ -78,6 +79,18 @@ cldthread *cldthread_posix_create( void *(*fptr)(void *), void *arg ){
 
     _posixfptr = fptr;
     return cldthread_create( _posixstub, arg );
+
+}
+
+int cldthread_write_result( void ){
+
+    if( _outputstream == NULL ) {
+
+        _outputstream = cielID_create( sw_get_current_output_id() );
+
+    }
+
+    return cielID_write_stream( _outputstream );
 
 }
 
@@ -103,7 +116,6 @@ swref *cldthread_result_as_ref( cldthread *const thread ){
     return ref;
 
 }
-
 
 cldvalue *cldthread_result_as_cldvalue( cldthread *const thread ){
 

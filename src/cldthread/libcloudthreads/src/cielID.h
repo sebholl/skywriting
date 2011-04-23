@@ -18,7 +18,9 @@ cielID *cielID_create2( char *id_str );
 void cielID_free( cielID *id );
 
 
-/* Reading from streams */
+/* Reading from / writing to streams */
+
+int cielID_write_stream( cielID *id );
 
 void cielID_close_fd( cielID *id );
 

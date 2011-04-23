@@ -156,7 +156,7 @@ char *cielID_dump_stream( cielID *id, size_t * const size_out ){
 
 }
 
-int cielID_publish_stream( cielID *id ){
+int cielID_write_stream( cielID *const id ){
 
     if( id->fd < 0 ){
 
@@ -172,21 +172,30 @@ int cielID_publish_stream( cielID *id ){
 
             free( streamfilepath );
 
-            if(id->fd >= 0){
+        }
 
-                swref* ref = swref_create( STREAMING, id->id_str, NULL, 0, sw_get_current_worker_loc() );
+    }
 
-                if( !sw_publish_ref( sw_get_master_loc(), sw_get_current_task_id(), ref ) ){
+    return id->fd;
 
-                    cielID_close_fd( id );
+}
 
-                }
 
-                free( ref );
+int cielID_publish_stream( cielID *const id ){
 
-            }
+    cielID_write_stream( id );
+
+    if( id->fd >= 0 ){
+
+        swref* ref = swref_create( STREAMING, id->id_str, NULL, 0, sw_get_current_worker_loc() );
+
+        if( !sw_publish_ref( sw_get_master_loc(), sw_get_current_task_id(), ref ) ){
+
+            cielID_close_fd( id );
 
         }
+
+        swref_free( ref );
 
     }
 

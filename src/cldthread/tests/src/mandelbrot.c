@@ -84,7 +84,7 @@ int main( int argc, char *argv[] ) {
 
             png_t pngInfo;
 
-            png_open_write( &pngInfo, 0, fdopen( cldthread_stream_result(), "ab" ) );
+            png_open_write( &pngInfo, 0, fdopen( cldthread_write_result(), "ab" ) );
 
             png_set_data( &pngInfo, countx * input->tWidth, county * input->tHeight, 8, PNG_TRUECOLOR_ALPHA, big_data );
 
@@ -111,16 +111,18 @@ int main( int argc, char *argv[] ) {
   Adapted from http://mjijackson.com/2008/02/rgb-to-hsl-and-rgb-to-hsv-color-model-conversion-algorithms-in-javascript,
   which was adapted from http://en.wikipedia.org/wiki/HSV_color_space.
  */
-int hsvToRgb( double h, double s, double v ){
+int hsvToRgb( double const h, double const s, double const v_in ){
 
-    double i = floor( h * 6 );
-    double f = ( h * 6 ) - i;
+    double const i = floor( h * 6 );
+    double const f = ( h * 6 ) - i;
 
-    char p = (char) ((v * (1.0 - s)) * 255);
-    char q = (char) ((v * (1.0 - f * s)) * 255);
-    char t = (char) ((v * (1.0 - (1.0 - f) * s)) * 255);
+    char const v = (char)( v_in * 255 );
 
-    char r, g, b;
+    char const p = (char) ((1.0 - s) * v);
+    char const q = (char) ((1.0 - f * s) * v);
+    char const t = (char) ((1.0 - (1.0 - f) * s) * v);
+
+    char r = 255, g = 255, b = 255;
 
     switch( ((int)i) % 6 ){
         case 0: r = v, g = t, b = p; break;
@@ -129,7 +131,6 @@ int hsvToRgb( double h, double s, double v ){
         case 3: r = p, g = q, b = v; break;
         case 4: r = t, g = p, b = v; break;
         case 5: r = v, g = p, b = q; break;
-        default: r = 255; g = 255; b = 255; break;
     }
 
     return ( b << 16 ) | ( g << 8 ) | r;
@@ -190,7 +191,7 @@ cldvalue *Mandelbrot_Tile_Generator( void *arg ) {
 
     png_t pngInfo;
 
-    png_open_write( &pngInfo, 0, fdopen( cldthread_stream_result(), "ab" ) );
+    png_open_write( &pngInfo, 0, fdopen( cldthread_write_result(), "ab" ) );
 
     png_set_data( &pngInfo, input->tWidth, input->tHeight, 8, PNG_TRUECOLOR_ALPHA, ( unsigned char * )data );
 
@@ -201,18 +202,44 @@ cldvalue *Mandelbrot_Tile_Generator( void *arg ) {
 
 }
 
+static size_t read_offset = 0, read_total = 0;
+
+/* Function that should mimic fread() but for memory pointers. */
+
+size_t read_mem(void* output, size_t size, size_t numel, void* user_pointer){
+
+    size_t const remaining = ( read_total - read_offset ) / size;
+
+    numel = remaining < numel ? remaining : numel;
+
+    if( output != NULL ) memcpy( output, user_pointer+read_offset, size*numel );
+
+    read_offset += size * numel;
+
+    return numel;
+
+}
 
 unsigned char *Tiler( cldthread **tiles, size_t const count_x, size_t const count_y, size_t const tile_width, size_t const tile_height ) {
 
     png_t pnginfo;
 
+    void *png_data;
     unsigned char *big_data = NULL, *tile_data = NULL;
 
     size_t tile_x, tile_y;
 
     for( tile_y = 0; tile_y < count_y; ++tile_y ) for( tile_x = 0; tile_x < count_x; ++tile_x ) {
 
-            png_open_read( &pnginfo, 0, fdopen( cldthread_result_as_fd( tiles[tile_x + ( count_x * tile_y )] ), "rb" ) );
+            read_offset = 0;
+
+            /* libPngLite doesn't like streaming files, so let's fully load it into memory first */
+            int retcode = png_open_read( &pnginfo, read_mem, png_data = cielID_dump_stream( tiles[tile_x + ( count_x * tile_y )], &read_total ) );
+
+            if( retcode != PNG_NO_ERROR ) {
+                fprintf( stderr, "Error while attempting to decode PNG (png_data: %p).\n%s\n", png_data, png_error_string(retcode) );
+                exit( EXIT_FAILURE );
+            }
 
             int const rowbytecount = tile_width * pnginfo.bpp;
 
@@ -220,9 +247,14 @@ unsigned char *Tiler( cldthread **tiles, size_t const count_x, size_t const coun
 
             tile_data = realloc( tile_data, tile_height * rowbytecount );
 
-            png_get_data( &pnginfo, tile_data );
+            retcode = png_get_data( &pnginfo, tile_data );
 
-            png_close_file( &pnginfo );
+            if ( retcode != PNG_NO_ERROR ) {
+                fprintf( stderr, "Error while attempting to dump PNG (file size: %d, error code: %d).\n%s\n", (int)read_total, retcode, png_error_string(retcode) );
+                exit( EXIT_FAILURE );
+            }
+
+            free( png_data );
 
             size_t y;
 
