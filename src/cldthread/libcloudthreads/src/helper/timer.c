@@ -1,7 +1,7 @@
 #ifdef PROFILE
 
 #include <stdio.h>
-#include <time.h>
+#include <sys/time.h>
 
 #include "timer.h"
 
@@ -10,7 +10,7 @@
 FILE* _timer_fp = NULL;
 
 static const char * string_stack[STACK_SIZE];
-static struct timespec timer_stack[STACK_SIZE];
+static struct timeval timer_stack[STACK_SIZE];
 static size_t timer_stack_index = 0;
 
 static char _prefix[ STACK_SIZE * 4 + 2 ];
@@ -60,7 +60,7 @@ void __attribute__ ((no_instrument_function)) _timer_setlabel( const char *name 
 
     string_stack[ timer_stack_index ] = name;
 
-    clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &timer_stack[ timer_stack_index ] );
+    gettimeofday( &timer_stack[ timer_stack_index ], NULL );
 
     fprintf( _timer_fp ? _timer_fp : stderr, "%s- %s,,,,,\n", prefix( timer_stack_index ), name );
 
@@ -74,20 +74,17 @@ void __attribute__ ((no_instrument_function)) _timer_end( void ){
 
     if( string_stack[ timer_stack_index ] == NULL ) return;
 
-	struct timespec start, end;
+	struct timeval start, end;
 
 	start = timer_stack[ timer_stack_index ];
-	clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &end);
+	gettimeofday( &end, NULL );
 
-    long const first = ( start.tv_sec * 1000000000 ) + start.tv_nsec;
-    long const last = ( end.tv_sec * 1000000000 ) + end.tv_nsec;
+    long const first = ( start.tv_sec * 1000000 ) + start.tv_usec;
+    long const last = ( end.tv_sec * 1000000 ) + end.tv_usec;
 
 	long const diff = last - first;
 
-	long const sec = diff / 1000000000;
-	long const nano = diff % 1000000000;
-
-	fprintf( _timer_fp ? _timer_fp : stderr, "%s,Total:,%ld,%ld,%ld,%s\n", prefix( timer_stack_index ), sec, nano, diff, string_stack[ timer_stack_index ] );
+	fprintf( _timer_fp ? _timer_fp : stderr, "%s,Total:,%ld,%ld,%ld,%ld,%ld,%s\n", prefix( timer_stack_index ), (long)start.tv_sec, (long)start.tv_usec, (long)end.tv_sec, (long)end.tv_usec, diff, string_stack[ timer_stack_index ] );
 
 }
 
