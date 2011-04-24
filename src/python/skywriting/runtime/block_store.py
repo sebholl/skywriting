@@ -93,7 +93,6 @@ class pycURLFetchContext:
         self.curl_ctx.setopt(pycurl.CONNECTTIMEOUT, 30)
         self.curl_ctx.setopt(pycurl.TIMEOUT, 300)
         self.curl_ctx.setopt(pycurl.NOSIGNAL, 1)
-        self.curl_ctx.setopt(pycurl.ENCODING, "") #empty string auto sets any supported encoding
         self.curl_ctx.setopt(pycurl.WRITEFUNCTION, callback_obj.write_data)
         self.curl_ctx.setopt(pycurl.HEADERFUNCTION, callback_obj.write_header_line)
         self.curl_ctx.setopt(pycurl.URL, str(url))
