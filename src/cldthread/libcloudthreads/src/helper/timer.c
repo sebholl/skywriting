@@ -13,7 +13,7 @@ static const char * string_stack[STACK_SIZE];
 static struct timespec timer_stack[STACK_SIZE];
 static size_t timer_stack_index = 0;
 
-static char _prefix[ STACK_SIZE * 3 + 2 ];
+static char _prefix[ STACK_SIZE * 4 + 2 ];
 
 static const char * __attribute__ ((no_instrument_function)) prefix( size_t const level ){
 
