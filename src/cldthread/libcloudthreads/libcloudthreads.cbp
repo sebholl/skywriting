@@ -30,8 +30,14 @@
 					<Add option="-g" />
 					<Add option="-finstrument-functions" />
 					<Add option="-finstrument-functions-exclude-file-list=helper/timer.c" />
+					<Add option="-finstrument-functions-exclude-function-list=printf,clock_gettime" />
 					<Add option="-DPROFILE" />
 				</Compiler>
+				<Linker>
+					<Add option="-finstrument-functions" />
+					<Add option="-finstrument-functions-exclude-file-list=helper/timer.c" />
+					<Add option="-finstrument-functions-exclude-function-list=printf,clock_gettime" />
+				</Linker>
 				<ExtraCommands>
 					<Add after="ln -f -s ./libcloudthreads.profile.a bin/libcloudthreads.a" />
 				</ExtraCommands>

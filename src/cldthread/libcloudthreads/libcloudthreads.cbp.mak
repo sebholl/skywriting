@@ -34,12 +34,12 @@ DEP_RELEASE =
 OUT_RELEASE = bin/libcloudthreads.release.a
 
 INC_PROFILE = $(INC)
-CFLAGS_PROFILE = $(CFLAGS) -g -finstrument-functions -finstrument-functions-exclude-file-list=helper/timer.c -DPROFILE
+CFLAGS_PROFILE = $(CFLAGS) -g -finstrument-functions -finstrument-functions-exclude-file-list=helper/timer.c -finstrument-functions-exclude-function-list=printf,clock_gettime -DPROFILE
 RESINC_PROFILE = $(RESINC)
 RCFLAGS_PROFILE = $(RCFLAGS)
 LIBDIR_PROFILE = $(LIBDIR)
 LIB_PROFILE = $(LIB)
-LDFLAGS_PROFILE = $(LDFLAGS)
+LDFLAGS_PROFILE = $(LDFLAGS) -finstrument-functions -finstrument-functions-exclude-file-list=helper/timer.c -finstrument-functions-exclude-function-list=printf,clock_gettime
 OBJDIR_PROFILE = .obj/Profile
 DEP_PROFILE = 
 OUT_PROFILE = bin/libcloudthreads.profile.a
