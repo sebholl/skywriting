@@ -9,7 +9,7 @@
 
 cldvalue *ListLinker( void *arg );
 
-typedef struct cldlink_int{
+typedef struct {
 
     int payload;
     cldptr next_ptr;
@@ -19,28 +19,55 @@ typedef struct cldlink_int{
 
 cldptr cldlink_create( int value, cldptr next ){
 
+    /* Allocate memory in the cldptr heap */
     cldptr cptr = cldptr_malloc( sizeof(cldlink_int) );
+
+    /* Retrieve the corresponding memory address for this ptr */
     cldlink_int *link = cldptr_deref( cptr );
 
+    /* Set the values of the link */
     link->payload = value;
     link->next_ptr = next;
 
+    /* And return */
     return cptr;
 
 }
 
-void cldlink_print( cldptr head ){
+cldvalue *cldlink_iterate( cldptr head ){
 
-    int i = 0;
+    size_t i = 0;
+
+    /* Allocate a temporary array for holding all the link values */
+    size_t arr_size = 4;
+    cldvalue **values = calloc( arr_size, sizeof(cldvalue*) );
+
     while (!cldptr_is_null(head)){
 
+        /* Dereference Cloud Pointer to Link */
         cldlink_int *link = ((cldlink_int *)cldptr_deref(head));
 
-        printf( "Item %d: %d\n", ++i, link->payload );
+        /* Resize the array where we are collecting item values together (if necessary). */
+        if( arr_size <= i ) values = realloc( values, (arr_size<<=2) * sizeof(cldvalue*) );
 
+        /* Store link value in array */
+        values[i++] = cldvalue_integer( link->payload );
+
+        /* Print out the value on the current worker (debugging purposes) */
+        printf( "Item %d: %d\n", (int)i, link->payload );
+
+        /* Advance to the next link in the list */
         head = link->next_ptr;
 
     }
+
+    /* Set the result to an array of cldvalue s */
+    cldvalue *result = cldvalue_array( values, i );
+
+    /* Free the temporary allocated array. */
+    free( values );
+
+    return result;
 
 }
 
@@ -57,19 +84,21 @@ int main(int argc, char *argv[])
 
     }
 
-    //if(argc==1){
+    int count = 10;
 
-        cldlink_print( ListLinker( (void *)10 )->value.ptr );
+    if( (argc == 1) || ( argc == 2 && sscanf( argv[1], "%d", &count ) ) ){
 
-        return cldapp_exit( cldvalue_none() );
+        cldvalue *output = cldlink_iterate( ListLinker( (void *)count )->value.ptr );
 
-    //} else {
+        return cldapp_exit( output );
 
-    //    printf( "Invalid parameters.\n\nUsage: sha_stream <filepath>\n" );
+    } else {
 
-    //}
+        printf( "Invalid parameters.\n\nUsage: linkedlist [<no of links>|default:10]\n" );
 
-    //return -1;
+    }
+
+    return -1;
 
 }
 
@@ -78,18 +107,25 @@ cldvalue *ListLinker( void *arg ){
 
     cldvalue *result;
 
-    int count = (int)arg;
+    int const count = (int)arg;
 
     if( count ){
 
-        cldthread *thread = cldthread_create( ListLinker, (void *)(--count) );
+        /* Spawn a thread */
+        cldthread *thread = cldthread_create( ListLinker, (void *)(count - 1) );
 
+        /* Request a value for it */
         cldthread_join( thread );
 
-        result = cldvalue_ptr( cldlink_create( (count + 1), cldvalue_to_cldptr( cldthread_result_as_cldvalue( thread ) ) ) );
+        /* Append a link to head of the thread result */
+        cldptr link = cldlink_create( count, cldvalue_to_cldptr( cldthread_result_as_cldvalue( thread ) ) );
+
+        /* Return the cldptr as the new thread result */
+        result = cldvalue_ptr( link );
 
     } else {
 
+        /* If the last item in the list, return a NULL cldptr. */
         result = cldvalue_ptr( cldptr_null() );
 
     }

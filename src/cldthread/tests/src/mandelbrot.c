@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include <math.h>
 
 #include <pnglite.h>
@@ -11,12 +12,10 @@ unsigned char *Tiler( cldthread **tiles, size_t const count_x, size_t const coun
 
 typedef struct {
 
+    double originX;
+    double originY;
     int tWidth;
     int tHeight;
-    int sWidth;
-    int sHeight;
-    int tOffX;
-    int tOffY;
     int maxit;
     double scale;
 
@@ -25,24 +24,30 @@ typedef struct {
 
 int main( int argc, char *argv[] ) {
 
-    int countx, county;
     int sizex, sizey;
-    int offx, offy;
 
-    int maxit = 250;
-    double scale = 0.005;
+    if(( argc >= 3 ) && sscanf( argv[1], "%d", &sizex )
+                     && sscanf( argv[2], "%d", &sizey ) ) {
 
-    if(( argc >= 7 ) && sscanf( argv[1], "%d", &sizex )
-                     && sscanf( argv[2], "%d", &sizey )
-                     && sscanf( argv[3], "%d", &countx )
-                     && sscanf( argv[4], "%d", &county )
-                     && sscanf( argv[5], "%d", &offx )
-                     && sscanf( argv[6], "%d", &offy ) ) {
+        double offx = 0.0;
+        if( argc > 3 ) sscanf( argv[3], "%lf", &offx );
 
-        if( argc >= 8 ) sscanf( argv[7], "%d", &maxit );
+        double offy = 0.0;
+        if( argc > 4 ) sscanf( argv[4], "%lf", &offy );
 
-        if( argc >= 9 ) sscanf( argv[8], "%lf", &scale );
+        int countx = 2;
+        if( argc > 5 ) sscanf( argv[5], "%d", &countx );
 
+        int county = 2;
+        if( argc > 6 ) sscanf( argv[6], "%d", &county );
+
+        int maxit = 250;
+        if( argc > 7 ) sscanf( argv[7], "%d", &maxit );
+
+        double scale = 3.0;
+        if( argc > 8 ) sscanf( argv[8], "%lf", &scale );
+
+        scale /= sizex;
 
         if( !cldthread_init() ) {
 
@@ -61,19 +66,35 @@ int main( int argc, char *argv[] ) {
 
         input->tWidth = sizex / countx;
         input->tHeight = sizey / county;
-        input->sWidth = 800;
-        input->sHeight = 800;
         input->maxit = maxit;
         input->scale = scale;
 
+        double const stepWidth = (sizex / countx) * scale;
+        double const stepHeight = (sizey / county) * scale;
+
         size_t y, x;
 
+        /* Start at the top */
+        input->originY = (sizey * scale)/2 - (stepHeight / 2) + offy;
+
         for( y = 0; y < county; ++y ) {
+
+            /* Start on the left */
+            input->originX = (stepWidth / 2) - (sizex * scale)/2 + offx;
+
             for( x = 0; x < countx; ++x ) {
-                input->tOffX = x + offx;
-                input->tOffY = y + offy;
+
+                /* Spawn a thread to calculate that particular tile */
                 tiles[( y*countx ) + x] = cldthread_create( Mandelbrot_Tile_Generator, input );
+
+                /* Move right */
+                input->originX += stepWidth;
+
             }
+
+            /* Move down */
+            input->originY -= stepHeight;
+
         }
 
         cldthread_joins( tiles, countx * county );
@@ -94,12 +115,14 @@ int main( int argc, char *argv[] ) {
 
         free( tiles );
 
-        /* We are streaming our result, so this return value is ignore anyway. */
+        /* We are writing the result directly to a fd so this return value is ignored anyway. */
         return cldapp_exit( cldvalue_none() );
 
     } else {
 
-        printf( "\nInvalid parameters.\n\nUsage: mandelbrot sizeX sizeY tilesX tilesY myX myY [max iterations] [scale]\n\n" );
+        printf( "\nInvalid parameters.\n\nUsage: mandelbrot imgWidth imgHeight [offsetX=0.0] [offsetY=0.0] "
+                "[tileCountX=2] [tileCountY=2] [max iterations=250] [scale=3.0]\n\n"
+                "Note \"scale\" is the multiple of the image width that represent 0-1.\n\n" );
 
     }
 
@@ -111,20 +134,20 @@ int main( int argc, char *argv[] ) {
   Adapted from http://mjijackson.com/2008/02/rgb-to-hsl-and-rgb-to-hsv-color-model-conversion-algorithms-in-javascript,
   which was adapted from http://en.wikipedia.org/wiki/HSV_color_space.
  */
-int hsvToRgb( double const h, double const s, double const v_in ){
+static int hsvToRgb( double const h, double const s, double const v_in ){
 
     double const i = floor( h * 6 );
     double const f = ( h * 6 ) - i;
 
-    char const v = (char)( v_in * 255 );
+    unsigned char const p = (char) ((1.0 - s) * v_in);
+    unsigned char const q = (char) ((1.0 - f * s) * v_in);
+    unsigned char const t = (char) ((1.0 - (1.0 - f) * s) * v_in);
 
-    char const p = (char) ((1.0 - s) * v);
-    char const q = (char) ((1.0 - f * s) * v);
-    char const t = (char) ((1.0 - (1.0 - f) * s) * v);
+    unsigned char const v = (char) (v_in * 255);
 
-    char r = 255, g = 255, b = 255;
+    unsigned char r = 255, g = 255, b = 255;
 
-    switch( ((int)i) % 6 ){
+    switch( ((unsigned int)i) % 6 ){
         case 0: r = v, g = t, b = p; break;
         case 1: r = q, g = v, b = p; break;
         case 2: r = p, g = v, b = t; break;
@@ -136,8 +159,17 @@ int hsvToRgb( double const h, double const s, double const v_in ){
     return ( b << 16 ) | ( g << 8 ) | r;
 }
 
+static inline double stretch( double const x ){
 
-int getPixel( double x0, double y0, int maxit ) {
+    /* [(2x-1)^2 + 1] / 2 */
+    long double const value = (2*x-1);
+    return value*value*(x-0.5)+0.5;
+
+}
+
+/* Mandelbrot Set Algorithm */
+
+static int getPixel( double x0, double y0, int maxit ) {
 
     double x = 0.0;
     double y = 0.0;
@@ -159,7 +191,9 @@ int getPixel( double x0, double y0, int maxit ) {
 
     }
 
-    return hsvToRgb( ((double)it)/maxit, (0.6+0.4*cos( it / 40.0 )), 1.0 ) | 0xFF000000;
+    double const proportion = stretch( ((double)it)/maxit );
+
+    return hsvToRgb( (1.0-proportion)*0.66, 0.6 + (0.4 * proportion), proportion ) | 0xFF000000;
     //return ((( it * 0xFF ) / maxit ) << 24 ) | 0x004080FF;
     //return 0xFF000000 | it;
 
@@ -171,21 +205,24 @@ cldvalue *Mandelbrot_Tile_Generator( void *arg ) {
 
     unsigned int *data = calloc( input->tWidth * input->tHeight, sizeof( int ) );
 
+    double const originX = input->originX;
+    double const originY = input->originY;
+
     int const maxit = input->maxit;
     double const scale = input->scale;
 
-    int const tWidth = input->tWidth;
-    int const tHeight = input->tHeight;
+    int const xMax = input->tWidth/2;
+    int const yMax = input->tHeight/2;
 
-    double const iLoopConst = (( input->tWidth * input->tOffX ) - ( input->sWidth >> 1 ) ) * input->scale;
-    double const jLoopConst = (( input->tHeight * input->tOffY ) - ( input->sHeight >> 1 ) ) * input->scale;
+    printf( "Calculating mandelbrot set for a %dx%d block centered on (%lf,%lf).\n",
+            xMax*2, yMax*2, originX, originY );
 
     size_t i = 0;
     int localI, localJ;
 
-    for( localJ = 0; localJ < tHeight; ++localJ ) {
-        for( localI = 0; localI < tWidth; ++localI ) {
-            data[i++] = getPixel( iLoopConst + localI * scale, jLoopConst + localJ * scale, maxit );
+    for( localJ = yMax; localJ > -yMax; --localJ ) {
+        for( localI = -xMax; localI < xMax; ++localI ) {
+            data[i++] = getPixel( originX + (localI * scale), originY + (localJ * scale), maxit );
         }
     }
 
@@ -197,14 +234,14 @@ cldvalue *Mandelbrot_Tile_Generator( void *arg ) {
 
     png_close_file( &pngInfo );
 
-    /* We are streaming our result, so this return value is ignore anyway. */
+    /* We are writing the result directly to a fd so this return value is ignored anyway. */
     return cldvalue_none();
 
 }
 
-static size_t read_offset = 0, read_total = 0;
-
 /* Function that should mimic fread() but for memory pointers. */
+
+static size_t read_offset = 0, read_total = 0;
 
 size_t read_mem(void* output, size_t size, size_t numel, void* user_pointer){
 
@@ -234,11 +271,17 @@ unsigned char *Tiler( cldthread **tiles, size_t const count_x, size_t const coun
             read_offset = 0;
 
             /* libPngLite doesn't like streaming files, so let's fully load it into memory first */
-            int retcode = png_open_read( &pnginfo, read_mem, png_data = cielID_dump_stream( tiles[tile_x + ( count_x * tile_y )], &read_total ) );
+            png_data = cielID_dump_stream( tiles[tile_x + ( count_x * tile_y )], &read_total );
+
+            /* and now let's decode it */
+            int retcode = png_open_read( &pnginfo, read_mem, png_data );
 
             if( retcode != PNG_NO_ERROR ) {
+
                 fprintf( stderr, "Error while attempting to decode PNG (png_data: %p).\n%s\n", png_data, png_error_string(retcode) );
+
                 exit( EXIT_FAILURE );
+
             }
 
             int const rowbytecount = tile_width * pnginfo.bpp;
@@ -247,6 +290,7 @@ unsigned char *Tiler( cldthread **tiles, size_t const count_x, size_t const coun
 
             tile_data = realloc( tile_data, tile_height * rowbytecount );
 
+            /* decompress the png data into an array of pixels */
             retcode = png_get_data( &pnginfo, tile_data );
 
             if ( retcode != PNG_NO_ERROR ) {

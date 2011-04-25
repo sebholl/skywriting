@@ -11,11 +11,15 @@ cldvalue *Fib(void *_index);
 
 char *_group_id;
 
+int disableMemoisation = 0;
+
 int main(int argc, char *argv[])
 {
     int termIndex;
 
-    if(argc==2 && sscanf( argv[1], "%d", &termIndex ) && termIndex >= 0){
+    if(argc>=2 && sscanf( argv[1], "%d", &termIndex ) && termIndex >= 0){
+
+        if( argc >= 3  && !sscanf( argv[2], "%d", &disableMemoisation ) ) disableMemoisation = 0;
 
         if( !cldthread_init() ){
 
@@ -32,7 +36,7 @@ int main(int argc, char *argv[])
 
     } else {
 
-        printf( "\nInvalid parameters (input must be a positive integer).\n\nUsage: fib <term-index>\n\n" );
+        printf( "\nInvalid parameters (input must be a positive integer).\n\nUsage: fib <term-index> [<disable_memoisation>]\n\n" );
 
     }
 
@@ -53,18 +57,23 @@ cldvalue *Fib(void *_index){
             result = 0;
             break;
         case 1:
-        case 2:
             result = 1;
             break;
         default:
         {
             cldthread *thread[2];
 
-            printf("--> Creating SmartThread Fib(%d)...\n", (index - 1) );
-            thread[0] = cldthread_smart_create( _group_id, Fib, (void *)(index - 1) );
+            printf("--> Spawning Thread Fib(%d)...\n", (index - 1) );
+            if(!disableMemoisation)
+                thread[0] = cldthread_smart_create( _group_id, Fib, (void *)(index - 1) );
+            else
+                thread[0] = cldthread_create( Fib, (void *)(index - 1) );
 
-            printf("--> Creating SmartThread Fib(%d)...\n", (index - 2) );
-            thread[1] = cldthread_smart_create( _group_id, Fib, (void *)(index - 2) );
+            printf("--> Spawning Thread Fib(%d)...\n", (index - 2) );
+            if(!disableMemoisation)
+                thread[1] = cldthread_smart_create( _group_id, Fib, (void *)(index - 2) );
+            else
+                thread[1] = cldthread_create( Fib, (void *)(index - 2) );
 
             printf("--> Joining threads...\n" );
             cldthread_joins( thread, 2 );
