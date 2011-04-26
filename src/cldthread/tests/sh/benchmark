@@ -19,7 +19,7 @@ for n in $(eval echo "{1..15}"); do
 	let x=100000000/$PI_COUNT
 	export PI_JUMP=$x
 	
-	$BENCHMARK stubs/picalc.sw "$PI_COUNT threads, $PI_JUMP iterations" 3
+	$BENCHMARK stubs/picalc.sw "$PI_COUNT threads, $PI_JUMP iterations" 4
 	
 done
 
@@ -29,7 +29,7 @@ for n in $(eval echo "{1..8}") 10 20 30 40 50 60 70 80; do
 	
 	export FIB_N=$n
 	export FIB_MEM=0
-	$BENCHMARK stubs/fib.sw "Fib($n) Memoised" 3
+	$BENCHMARK stubs/fib.sw "Fib($n) Memoised" 4
 	
 done
 
@@ -39,7 +39,7 @@ for n in $(eval echo "{1..8}"); do
 	
 	export FIB_N=$n
 	export FIB_MEM=1
-	$BENCHMARK stubs/fib.sw "Fib($n) Non-Memoised" 3
+	$BENCHMARK stubs/fib.sw "Fib($n) Non-Memoised" 4
 	
 done
 
@@ -48,7 +48,7 @@ done
 for n in $(eval echo "{0..20}"); do
 	
 	export LIST_SIZE=$n
-	$BENCHMARK stubs/linkedlist.sw "List Length = $n" 3
+	$BENCHMARK stubs/linkedlist.sw "List Length = $n" 4
 	
 done
 
@@ -58,7 +58,7 @@ for n in $(eval echo "{1..15}"); do
 	
 	export MAN_SPLITX=$n
 	export MAN_SPLITY=1
-	$BENCHMARK stubs/mandelbrot.sw "Mandelbrot (${MAN_SPLITX} x ${MAN_SPLITY} tiles)" 3
+	$BENCHMARK stubs/mandelbrot.sw "Mandelbrot (${MAN_SPLITX} x ${MAN_SPLITY} tiles)" 4
 	
 done
 
