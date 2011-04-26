@@ -2,7 +2,6 @@
 
 import math
 import sys
-import matplotlib.pyplot as plt
 
 sys.stdin.readline()
 

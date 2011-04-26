@@ -1,0 +1,34 @@
+#!/bin/bash
+
+SCRIPT=$1
+COMMENT=$2
+COUNT=${3:-10}
+
+SWMASTER=${SWMASTER:-http://localhost:8000/}
+
+SCRIPT_BASE=${SCRIPT##*/}
+SCRIPT_ROOT=${SCRIPT_BASE%.*}
+OUTPUT_FILE=${OUTPUT_FILE:-./$SCRIPT_ROOT.timings.csv}
+
+TMPPATH=/tmp/loop-stuff.txt
+
+for i in $(eval echo "{1..$COUNT}"); do
+	
+	echo "Flushing workers..."
+	$SWROOT/scripts/sw-flush-workers -m $SWMASTER -f
+	sleep 3
+	echo "Running instance $i/$COUNT of $SCRIPT_BASE..."
+	/usr/bin/time --quiet --output="$OUTPUT_FILE" -a --format="$SCRIPT_BASE,$COMMENT,$i,%K,%P,%e,%x" $SWROOT/scripts/sw-job -e -m "$SWMASTER" "$SCRIPT" > $TMPPATH
+	JOB_URL=$(cat $TMPPATH | grep JOB_URL | head -n 1 | cut -d" " -f3)
+	
+done
+
+echo "Starting task crawler on \"$JOB_URL\"."
+$SWROOT/scripts/sw-task-crawler "$JOB_URL" > "${OUTPUT_FILE%.*}/task-crawler/$SCRIPT_BASE.taskc.csv" &
+
+sleep 8
+kill $! > /dev/null 2>&1
+
+STATS=$($SWROOT/scripts/eval/task-crawler-stats.py < "${OUTPUT_FILE%.*}/task-crawler/$SCRIPT_BASE.taskc.csv")
+echo "$SCRIPT_BASE,$COMMENT,$i,$JOB_URL,$STATS" >> "${OUTPUT_FILE%.*}/task-crawler/summary.csv"
+
