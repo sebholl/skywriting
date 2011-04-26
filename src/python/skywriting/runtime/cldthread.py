@@ -118,7 +118,9 @@ class _CloudProcessCommonExecutor(SWExecutor):
     def _execute(self, block_store, task_id):
         
         self.task_id = task_id
-        file_inputs, transfer_ctx = block_store.retrieve_filenames_for_refs(self.input_refs)
+        
+        #file_inputs, transfer_ctx = block_store.retrieve_filenames_for_refs(self.input_refs)
+        file_inputs = block_store.retrieve_filenames_for_refs_eager(self.input_refs)
         
         self.env['CL_WORKER_LOC'] = block_store.netloc.replace("http://", "", 1)
         self.env['CL_BLOCK_STORE'] = block_store.base_dir
@@ -130,15 +132,15 @@ class _CloudProcessCommonExecutor(SWExecutor):
         self.proc = self.start_process(block_store)
         add_running_child(self.proc)
         
-        transfer_ctx.consumers_attached();
+        #transfer_ctx.consumers_attached();
 
         rc = self.proc.wait()
         
         remove_running_child(self.proc)
         
-        transfer_ctx.wait_for_all_transfers()
+        #transfer_ctx.wait_for_all_transfers()
         
-        transfer_ctx.cleanup(block_store)
+        #transfer_ctx.cleanup(block_store)
 
         self.proc = None
 
