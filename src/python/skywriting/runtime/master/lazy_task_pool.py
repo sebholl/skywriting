@@ -35,6 +35,17 @@ class LazyTaskPool(plugins.SimplePlugin):
         # For signalling workers of task state changes
         self.worker_pool = worker_pool
     
+        self.reset()
+        
+        # At the moment, this is a coarse-grained lock, which is acquired when
+        # a task is added or completed, or when references are externally
+        # published.
+        self._lock = Lock()
+        
+    def reset(self):
+        
+        cherrypy.log('Flushing lazy task pool', 'TASKPOOL', logging.INFO)
+        
         # Mapping from task ID to task object.
         self.tasks = {}
         
@@ -54,11 +65,6 @@ class LazyTaskPool(plugins.SimplePlugin):
         # A thread-safe queue of runnable tasks, which we use to pass tasks to
         # the LazyScheduler.
         self.task_queue = Queue()
-        
-        # At the moment, this is a coarse-grained lock, which is acquired when
-        # a task is added or completed, or when references are externally
-        # published.
-        self._lock = Lock()
         
     def subscribe(self):
         self.bus.subscribe('task_failed', self.task_failed)
@@ -466,7 +472,10 @@ class LazyTaskPoolAdapter:
             
             if task.continues_task is not None:
                 parent_task.continuation = spawned_task_id
-
+	
+    def flush_task_dict(self):
+        self.lazy_task_pool.reset()
+	
     def commit_task(self, task_id, commit_payload):
         
         commit_bindings = commit_payload['bindings']
