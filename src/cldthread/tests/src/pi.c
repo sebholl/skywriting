@@ -74,7 +74,7 @@ cldvalue *Pi_Mapper(void *const _arg){
 }
 
 
-double Pi_Reducer(long const numSamples, long const numSurveys){
+long double Pi_Reducer(long const numSamples, long const numSurveys){
 
     cldthread **threads;
 
@@ -115,7 +115,7 @@ double Pi_Reducer(long const numSamples, long const numSurveys){
 
     printf("Returning result...\n");
 
-    return ( numInside / ((numSamples * numSurveys) * 0.25) );
+    return ( numInside / ((numSamples * numSurveys) * 0.25L) );
 
 }
 

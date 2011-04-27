@@ -8,7 +8,7 @@ BENCHMARK=./loop
 rm -r -f "${OUTPUT_FILE%.*}/task-crawler/"
 mkdir -p "${OUTPUT_FILE%.*}/task-crawler/"
 
-echo "Script,Comment,Iteration,Average Memory (KiB),Avg. CPU Time,Total Time,Exit Status" > $OUTPUT_FILE
+echo "Script,Comment,Iteration,Total Time,Exit Status" > $OUTPUT_FILE
 echo "Script,Comment,Iteration Count,Job URL,No of Tasks,Job Duration" > "${OUTPUT_FILE%.*}/task-crawler/summary.csv"
 
 # PI CALC
@@ -16,16 +16,16 @@ echo "Script,Comment,Iteration Count,Job URL,No of Tasks,Job Duration" > "${OUTP
 for n in $(eval echo "{1..15}"); do
 	
 	export PI_COUNT=$n
-	let x=100000000/$PI_COUNT
+	let x=100000000000/$PI_COUNT
 	export PI_JUMP=$x
 	
-	$BENCHMARK stubs/picalc.sw "$PI_COUNT threads, $PI_JUMP iterations" 4
+	$BENCHMARK stubs/picalc.sw "$PI_COUNT threads" 4
 	
 done
 
 # FIB MEMOISED
 
-for n in $(eval echo "{1..8}") 10 20 30 40 50 60 70 80; do
+for n in $(eval echo "{0..9}") 10 20 30 40 50 60 70 80; do
 	
 	export FIB_N=$n
 	export FIB_MEM=0
@@ -35,7 +35,7 @@ done
 
 # FIB NON-MEMOISED
 
-for n in $(eval echo "{1..8}"); do
+for n in $(eval echo "{0..10}"); do
 	
 	export FIB_N=$n
 	export FIB_MEM=1
