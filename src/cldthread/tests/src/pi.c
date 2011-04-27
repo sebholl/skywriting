@@ -74,7 +74,7 @@ cldvalue *Pi_Mapper(void *const _arg){
 }
 
 
-long double Pi_Reducer(long const numSamples, long const numSurveys){
+double Pi_Reducer(long const numSamples, long const numSurveys){
 
     cldthread **threads;
 
