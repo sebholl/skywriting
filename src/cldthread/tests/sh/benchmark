@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export SWMASTER=${1:-http://localhost:9000/}
+export SWMASTER=${1:-http://localhost:8000/}
 export OUTPUT_FILE=${2:-./results.csv}
 
 BENCHMARK=./loop
@@ -16,7 +16,7 @@ echo "Script,Comment,Iteration Count,Job URL,No of Tasks,Job Duration" > "${OUTP
 for n in $(eval echo "{1..15}"); do
 	
 	export PI_COUNT=$n
-	let x=100000000000/$PI_COUNT
+	let x=200000000000/$PI_COUNT
 	export PI_JUMP=$x
 	
 	$BENCHMARK stubs/picalc.sw "$PI_COUNT threads" 4
@@ -48,7 +48,7 @@ done
 for n in $(eval echo "{0..20}"); do
 	
 	export LIST_SIZE=$n
-	$BENCHMARK stubs/linkedlist.sw "List Length = $n" 4
+	$BENCHMARK stubs/linkedlist.sw "$n Items" 4
 	
 done
 
@@ -58,7 +58,7 @@ for n in $(eval echo "{1..15}"); do
 	
 	export MAN_SPLITX=$n
 	export MAN_SPLITY=1
-	$BENCHMARK stubs/mandelbrot.sw "Mandelbrot (${MAN_SPLITX} x ${MAN_SPLITY} tiles)" 4
+	$BENCHMARK stubs/mandelbrot.sw "${MAN_SPLITX} x ${MAN_SPLITY} tiles" 4
 	
 done
 
