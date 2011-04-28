@@ -14,18 +14,18 @@ TMPPATH=/tmp/loop-stuff.txt
 
 for i in $(eval echo "{1..$COUNT}"); do
 	
-	echo "Flushing workers..."
 	$SWROOT/scripts/sw-flush-workers -m $SWMASTER -f
 	wget --delete-after "${SWMASTER}task/flush/" > /dev/null 2>&1
-	sleep 5
-	echo "Running instance $i/$COUNT of $SCRIPT_BASE..."
+	#sleep 5
+	
+	echo "Running instance $i/$COUNT of $SCRIPT_BASE ($COMMENT)..."
 	/usr/bin/time --quiet --output="$OUTPUT_FILE" -a --format="$SCRIPT_BASE,$COMMENT,$i,%e,%x" $SWROOT/scripts/sw-job -e -m "$SWMASTER" "$SCRIPT" > $TMPPATH
 	JOB_URL=$(cat $TMPPATH | grep JOB_URL | head -n 1 | cut -d" " -f3)
 	
 done
 
 echo "Starting task crawler on \"$JOB_URL\"."
-$SWROOT/scripts/sw-task-crawler "$JOB_URL" | head -n 700 > "${OUTPUT_FILE%.*}/task-crawler/$SCRIPT_BASE.$COMMENT.taskc.csv"
+$SWROOT/scripts/sw-task-crawler "$JOB_URL" | head -n 700 > "${OUTPUT_FILE%.*}/task-crawler/$SCRIPT_BASE.$COMMENT.taskc.csv" 2>/dev/null
 
 STATS=$($SWROOT/scripts/eval/task-crawler-stats.py < "${OUTPUT_FILE%.*}/task-crawler/$SCRIPT_BASE.$COMMENT.taskc.csv")
 echo "$SCRIPT_BASE,$COMMENT,$i,$JOB_URL,$STATS" >> "${OUTPUT_FILE%.*}/task-crawler/summary.csv"

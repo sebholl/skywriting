@@ -8,13 +8,13 @@
 
 #include "pi_halton.c"
 
-double Pi_Reducer( long numSamples, long numSurveys );
+double Pi_Reducer( uintmax_t numSamples, uintmax_t numSurveys );
 
 int main(int argc, char *argv[])
 {
-    long numSamples, numSurveys;
+    uintmax_t numSamples, numSurveys;
 
-    if( (argc==3) && sscanf( argv[1], "%ld", &numSamples ) && sscanf( argv[2], "%ld", &numSurveys )){
+    if( (argc==3) && sscanf( argv[1], "%"SCNuMAX, &numSamples ) && sscanf( argv[2], "%"SCNuMAX, &numSurveys )){
 
         double result;
 
@@ -44,21 +44,21 @@ int main(int argc, char *argv[])
 
 cldvalue *Pi_Mapper(void *const _arg){
 
-    const long *const arg = (long *)_arg;
+    const uintmax_t *const arg = (uintmax_t *)_arg;
 
-    long const numSamples = arg[0];
-    long const offset = arg[1];
+    uintmax_t const numSamples = arg[0];
+    uintmax_t const offset = arg[1];
 
     HaltonSeq *seq = HaltonSeq_Create(offset);
 
-    printf( "Sampling %ld random numbers from offset %ld...\n", numSamples, offset );
+    printf( "Sampling %"PRIuMAX" random numbers from offset %"PRIuMAX"...\n", numSamples, offset );
 
     double x, y;
     double *point;
 
-    long counts[] = {0L, 0L};
+    uintmax_t counts[] = {0L, 0L};
 
-    long i = 0L;
+    uintmax_t i = 0L;
     for(i = 0; i < numSamples; i++){
 
         point = HaltonSeq_NextPoint(seq);
@@ -74,7 +74,7 @@ cldvalue *Pi_Mapper(void *const _arg){
 }
 
 
-double Pi_Reducer(long const numSamples, long const numSurveys){
+double Pi_Reducer(uintmax_t const numSamples, uintmax_t const numSurveys){
 
     cldthread **threads;
 
@@ -82,21 +82,21 @@ double Pi_Reducer(long const numSamples, long const numSurveys){
 
     printf("Starting thread spawning...\n");
 
-    long i;
+    uintmax_t i;
 
-    long thread_input[2];
+    uintmax_t thread_input[2];
 
     thread_input[0] = numSamples;
     thread_input[1] = 0L;
 
     for(i = 0; i < numSurveys; i++){
-        thread_input[1] += numSamples;
         threads[i] = cldthread_create( Pi_Mapper, thread_input );
         if( threads[i] == NULL ){
-            fprintf( stderr, "Failed to spawn thread %ld.\n", i );
+            fprintf( stderr, "Failed to spawn thread %"PRIuMAX".\n", i );
             fflush( stdout );
         }
-        printf("Spawned thread %ld (%p).\n", i, threads[i] );
+        thread_input[1] += numSamples;
+        printf("Spawned thread %"PRIuMAX" (%p).\n", i, threads[i] );
     }
 
     printf("Waiting on thread results...\n");
@@ -105,7 +105,7 @@ double Pi_Reducer(long const numSamples, long const numSurveys){
 
     printf("Calculating Pi...\n");
 
-    uintmax_t numInside = 0L;
+    uintmax_t numInside = 0;
 
     for(i = 0; i < numSurveys; i++){
         numInside += cldvalue_to_integer( cldthread_result_as_cldvalue( threads[i] ) );

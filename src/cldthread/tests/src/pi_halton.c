@@ -1,3 +1,5 @@
+#include <unistd.h>
+
 /* Bases */
 #define HaltonSeq_intBaseP_sz 2
 static int HaltonSeq_intBaseP[] = {2, 3};
@@ -8,14 +10,14 @@ static int HaltonSeq_intBaseK[] = {63, 40};
 
 typedef struct {
 
-    long index;
+    uintmax_t index;
     double *x;
     double **q;
-    int **d;
+    uintmax_t **d;
 
 } HaltonSeq;
 
-HaltonSeq *HaltonSeq_Create( long const startindex ){
+HaltonSeq *HaltonSeq_Create( uintmax_t const startindex ){
 
     HaltonSeq *result = calloc( 1, sizeof( HaltonSeq ) );
 
@@ -23,22 +25,22 @@ HaltonSeq *HaltonSeq_Create( long const startindex ){
 
     result->x = calloc( HaltonSeq_intBaseK_sz, sizeof( double ) );
     result->q = calloc( HaltonSeq_intBaseK_sz, sizeof( double * ) );
-    result->d = calloc( HaltonSeq_intBaseK_sz, sizeof( int * ) );
+    result->d = calloc( HaltonSeq_intBaseK_sz, sizeof( uintmax_t * ) );
 
     size_t i;
 
     for(i = 0; i < HaltonSeq_intBaseK_sz; i++){
         result->x[i] = 0;
         result->q[i] = calloc( HaltonSeq_intBaseK[i], sizeof( double ) );
-        result->d[i] = calloc( HaltonSeq_intBaseK[i], sizeof( int ) );
+        result->d[i] = calloc( HaltonSeq_intBaseK[i], sizeof( uintmax_t ) );
     }
 
     for(i = 0; i < HaltonSeq_intBaseK_sz; i++){
-        long k = startindex;
+        uintmax_t k = startindex;
         size_t j;
         for(j = 0; j < HaltonSeq_intBaseK[i]; j++){
             result->q[i][j] = (j == 0 ? 1.0 : result->q[i][j-1])/HaltonSeq_intBaseP[i];
-            result->d[i][j] = (int)(k % HaltonSeq_intBaseP[i]);
+            result->d[i][j] = (uintmax_t)(k % HaltonSeq_intBaseP[i]);
             k = (k - result->d[i][j])/HaltonSeq_intBaseP[i];
             result->x[i] += result->d[i][j] * result->q[i][j];
         }

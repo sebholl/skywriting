@@ -1,7 +1,8 @@
 #!/bin/bash
 
-export SWMASTER=${1:-http://localhost:8000/}
-export OUTPUT_FILE=${2:-./results.csv}
+export SWMASTER=${1}
+export OUTPUT_FILE=${2}
+export COUNT=${3}
 
 BENCHMARK=./loop
 
@@ -11,58 +12,18 @@ mkdir -p "${OUTPUT_FILE%.*}/task-crawler/"
 echo "Script,Comment,Iteration,Total Time,Exit Status" > $OUTPUT_FILE
 echo "Script,Comment,Iteration Count,Job URL,No of Tasks,Job Duration" > "${OUTPUT_FILE%.*}/task-crawler/summary.csv"
 
-# PI CALC
+echo "Testing:"
 
-for n in $(eval echo "{1..15}"); do
-	
-	export PI_COUNT=$n
-	let x=200000000000/$PI_COUNT
-	export PI_JUMP=$x
-	
-	$BENCHMARK stubs/picalc.sw "$PI_COUNT threads" 4
-	
+for i in ${@:4}; do
+	echo "- $i"
 done
 
-# FIB MEMOISED
+echo "Beginning benchmark(s) [$COUNT iteration(s) each]..."
 
-for n in $(eval echo "{0..9}") 10 20 30 40 50 60 70 80; do
-	
-	export FIB_N=$n
-	export FIB_MEM=0
-	$BENCHMARK stubs/fib.sw "Fib($n) Memoised" 4
-	
+for i in ${@:4}; do
+	. $i
 done
 
-# FIB NON-MEMOISED
-
-for n in $(eval echo "{0..10}"); do
-	
-	export FIB_N=$n
-	export FIB_MEM=1
-	$BENCHMARK stubs/fib.sw "Fib($n) Non-Memoised" 4
-	
-done
-
-# LINKED LIST
-
-for n in $(eval echo "{0..20}"); do
-	
-	export LIST_SIZE=$n
-	$BENCHMARK stubs/linkedlist.sw "$n Items" 4
-	
-done
-
-# MANDELBROT
-
-for n in $(eval echo "{1..15}"); do
-	
-	export MAN_SPLITX=$n
-	export MAN_SPLITY=1
-	$BENCHMARK stubs/mandelbrot.sw "${MAN_SPLITX} x ${MAN_SPLITY} tiles" 4
-	
-done
-
-
-
+echo "Completed benchmark(s)."
 
 
