@@ -1,0 +1,12 @@
+#!/bin/bash
+
+x=$(wc -l ${1} | cut -d" " -f1)
+
+cat ${1} | while read myLine
+do
+	echo "Running benchmark on $x worker(s)."
+	./benchmark $3 "results$x.csv" ${@:4}
+	ec2kill --region ${2} $myLine
+	let x=$x-1
+done
+
